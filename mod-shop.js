@@ -4,7 +4,7 @@
   const App = window.App, S = App.S, SL = App.SL, C = App.C;
   const esc = App.esc, euros = App.euros;
   let compareScope = 'all', priceQuery = '', priceSection = '';
-  let addQuery = '', tplOpen = false;
+  let addQuery = '', tplOpen = false, essOpen = false;
 
   function render(sub) {
     if (sub === 'compare') renderCompare();
@@ -61,6 +61,7 @@
       <div class="btnrow"><button class="ghost" id="fromMenu">🍽️ Desde el menú</button><button class="ghost" id="repeat">⎘ Repetir una compra</button></div>
       ${items.length ? '<button class="ghost block small" id="tplToggle">Ocultar plantillas</button>' : ''}`}
     </div>
+    ${essentialsCard()}
     <div class="addbox"><input id="addq" placeholder="＋ Añadir producto…" autocomplete="off" value="${esc(addQuery)}"><div id="sugg" class="sugg"></div></div>`;
 
     if (!items.length) {
@@ -119,6 +120,7 @@
       S.putMany(all.map(i => ({ kind: 'shopitem', data: i, deleted: true })));
       App.toast('Lista vaciada', { undo: () => S.putMany(all.map(i => ({ kind: 'shopitem', data: i }))) });
     };
+    bindEssentials();
     setupAddBox();
   }
 
@@ -193,6 +195,118 @@
       App.closeSheet();
       App.toast(changes.length ? `Añadidos ${changes.length} productos` : 'Ya tenías todo en la lista');
     });
+  }
+
+  // ---------- Esenciales ----------
+  // Lo que se compra aunque no esté en el menú (leche, café, sal, limpieza…).
+  // Cada uno tiene una frecuencia; "toca reponer" si hace más días que eso desde la última compra.
+  function lastBought() {
+    const m = {};
+    App.purchases().forEach(pu => (pu.items || []).forEach(i => {
+      if (i.product && (!m[i.product] || pu.date > m[i.product])) m[i.product] = pu.date;
+    }));
+    return m;
+  }
+  function essentialsStatus() {
+    const last = lastBought(), today = Date.parse(App.today());
+    const inList = new Set(App.shopItems().filter(i => !i.checked).map(i => i.product));
+    return App.products().filter(p => p.essential).map(p => {
+      const l = last[p.id];
+      const days = l ? Math.round((today - Date.parse(l)) / 86400000) : null;
+      return { p, days, due: days != null && days >= (p.every || 30), never: days == null, inList: inList.has(p.id) };
+    }).sort((a, b) => App.section(a.p.section).order - App.section(b.p.section).order || a.p.name.localeCompare(b.p.name, 'es'));
+  }
+  const essLabel = e => e.never ? '' : e.days === 0 ? 'hoy' : `hace ${e.days} d`;
+  const shortName = n => n.replace(/\s*\(.*\)\s*$/, '');
+
+  function essentialsCard() {
+    const st = essentialsStatus().filter(e => !e.inList);
+    const due = st.filter(e => e.due), rest = st.filter(e => !e.due);
+    if (!essOpen) {
+      return `<div class="card ess"><div class="ess-sum" id="essToggle"><div class="emoji">🧂</div><div class="grow"><b>Esenciales</b>
+        <div class="muted ellipsis">${due.length ? `Toca reponer: ${due.slice(0, 4).map(e => esc(shortName(e.p.name))).join(', ')}${due.length > 4 ? '…' : ''}` : 'Leche, café, sal, limpieza… lo que se gasta aunque no esté en el menú'}</div></div>
+        ${due.length ? `<span class="pill neg">${due.length}</span>` : ''}<span class="muted">▾</span></div></div>`;
+    }
+    const chip = e => `<button data-ess="${e.p.id}" class="${e.due ? 'due' : ''}">+ ${esc(shortName(e.p.name))}${essLabel(e) ? ` <span class="muted">· ${essLabel(e)}</span>` : ''}</button>`;
+    let h = `<div class="card ess"><div class="ess-sum" id="essToggle"><div class="emoji">🧂</div><div class="grow"><b>Esenciales</b>
+      <div class="muted">Lo que se gasta aunque no esté en el menú. Toca para añadir.</div></div><span class="muted">▴</span></div>`;
+    if (due.length) {
+      h += `<div class="section-label">Toca reponer</div><div class="chips">${due.map(chip).join('')}</div>
+        <button class="small primary block" id="essAddDue">＋ ${due.length === 1 ? 'Añadirlo a la lista' : `Añadir los ${due.length} que tocan`}</button>`;
+    }
+    // El resto, agrupado por sección del súper.
+    let lastSec = null;
+    rest.forEach(e => {
+      const sec = App.section(e.p.section);
+      if (sec.id !== lastSec) { if (lastSec !== null) h += `</div>`; h += `<div class="section-label">${esc(sec.emoji)} ${esc(sec.name)}</div><div class="chips">`; lastSec = sec.id; }
+      h += chip(e);
+    });
+    if (lastSec !== null) h += `</div>`;
+    if (!st.length) h += `<div class="muted" style="margin-top:8px">Todos los esenciales ya están en la lista 👍</div>`;
+    h += `<button class="small ghost block" id="essManage">⚙️ Gestionar esenciales</button></div>`;
+    return h;
+  }
+
+  function bindEssentials() {
+    const view = App.view, $ = s => view.querySelector(s);
+    $('#essToggle').onclick = () => { essOpen = !essOpen; App.render(); };
+    view.querySelectorAll('[data-ess]').forEach(b => b.onclick = () => addEssential(S.get(b.dataset.ess)));
+    if ($('#essAddDue')) $('#essAddDue').onclick = () => {
+      const due = essentialsStatus().filter(e => e.due && !e.inList);
+      S.putMany(due.map((e, i) => ({ kind: 'shopitem', data: newEssentialItem(e.p, i) })));
+      App.toast(`Añadidos ${due.length} esenciales`);
+    };
+    if ($('#essManage')) $('#essManage').onclick = openManageEssentials;
+  }
+
+  function newEssentialItem(p, n) {
+    return { id: 'i-' + App.uid() + (n || ''), product: p.id, name: p.name, section: p.section,
+      amount: p.essentialQty || defaultAmount(p), checked: false, source: 'essential', addedAt: Date.now() };
+  }
+  function addEssential(p) {
+    if (!p) return;
+    if (App.shopItems().some(i => i.product === p.id && !i.checked)) { App.toast('Ya está en la lista'); return; }
+    S.put('shopitem', newEssentialItem(p));
+    App.toast(`Añadido: ${shortName(p.name)}`);
+  }
+
+  function openManageEssentials() {
+    const m = App.sheet(`<h3>🧂 Esenciales</h3>
+      <div class="muted">Cada cuántos días soléis reponer cada cosa. Cuando pasen esos días desde la última compra, saldrá en "Toca reponer".</div>
+      <div class="list tight" id="ess" style="margin-top:8px"></div>
+      <button class="small block" id="addEss">＋ Añadir esencial</button>
+      <div class="actions"><button class="primary" id="close">Listo</button></div>`);
+    const $ = s => m.querySelector(s);
+    function draw() {
+      const st = essentialsStatus();
+      let lastSec = null, h = '';
+      st.forEach(e => {
+        const sec = App.section(e.p.section);
+        if (sec.id !== lastSec) { h += `<div class="sechdr">${esc(sec.emoji)} ${esc(sec.name)}</div>`; lastSec = sec.id; }
+        h += `<div class="item"><div class="grow"><div class="ellipsis">${esc(e.p.name)}</div><div class="muted">${e.never ? 'aún sin comprar' : 'última compra ' + essLabel(e)}</div></div>
+          <span class="muted">cada</span><input type="number" inputmode="numeric" min="1" step="1" class="every-input" data-every="${e.p.id}" value="${e.p.every || 30}"><span class="muted">d</span>
+          <button class="xbtn" data-unset="${e.p.id}" aria-label="Quitar de esenciales">✕</button></div>`;
+      });
+      $('#ess').innerHTML = h || '<div class="muted" style="padding:8px 0">No hay esenciales.</div>';
+      m.querySelectorAll('[data-every]').forEach(inp => inp.onchange = () => {
+        const v = Math.round(App.num(inp.value));
+        if (!(v > 0)) { App.toast('Pon un número de días'); return; }
+        S.put('product', Object.assign({}, S.get(inp.dataset.every), { every: v }));
+      });
+      m.querySelectorAll('[data-unset]').forEach(b => b.onclick = () => {
+        const p = S.get(b.dataset.unset);
+        S.put('product', Object.assign({}, p, { essential: false }));
+        App.toast(`${shortName(p.name)} ya no es esencial`, { undo: () => S.put('product', Object.assign({}, S.get(p.id), { essential: true })) });
+        draw();
+      });
+    }
+    $('#addEss').onclick = () => App.pickProduct(p => {
+      S.put('product', Object.assign({}, p, { essential: true, every: p.every || 30, essentialQty: p.essentialQty || defaultAmount(p) }));
+      App.toast(`${shortName(p.name)} añadido a esenciales`);
+      draw();
+    });
+    $('#close').onclick = App.closeSheet;
+    draw();
   }
 
   // ---------- Editar una línea de la lista ----------
@@ -412,6 +526,8 @@
       <div class="row" id="packRow"><div class="grow"><label>Tamaño del envase</label><input id="pack" type="number" inputmode="decimal" step="any" min="0" value="${p.pack}"></div>
         <div style="width:110px"><label>Unidad</label><select id="unit">${[['g', 'gramos'], ['ml', 'ml'], ['ud', 'unidades']].map(([u, n]) => `<option value="${u}" ${u === p.unit ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
       <label class="row check-line"><input type="checkbox" id="staple" ${p.staple ? 'checked' : ''}> De despensa (al crear la lista desde el menú sale desmarcado)</label>
+      <label class="row check-line"><input type="checkbox" id="essential" ${p.essential ? 'checked' : ''}> Esencial: lo compramos aunque no esté en el menú</label>
+      <div class="row" id="everyRow" style="margin-top:6px"><span class="grow muted">Se suele reponer cada</span><input id="every" type="number" inputmode="numeric" min="1" step="1" class="every-input" value="${p.every || 30}"><span class="muted">días</span></div>
       <label id="priceLbl">Precios</label>
       <div class="list tight">${stores.map(s => {
         const r = p.prices && p.prices[s.id];
@@ -434,6 +550,8 @@
       $('#priceLbl').textContent = bulk ? 'Precio por kg / litro' : 'Precio por envase';
     };
     $('#bulk').onchange = syncBulk;
+    const syncEss = () => { $('#everyRow').style.display = $('#essential').checked ? '' : 'none'; };
+    $('#essential').onchange = syncEss; syncEss();
     const cleared = new Set();
     m.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => { cleared.add(b.dataset.clr); m.querySelector(`[data-ps="${b.dataset.clr}"]`).value = ''; });
     $('#cancel').onclick = App.closeSheet;
@@ -441,6 +559,7 @@
       p.name = $('#nm').value.trim();
       if (!p.name) { App.toast('Ponle un nombre'); return; }
       p.section = $('#sec').value; p.bulk = $('#bulk').checked; p.unit = $('#unit').value; p.staple = $('#staple').checked;
+      p.essential = $('#essential').checked; p.every = Math.round(App.num($('#every').value)) || p.every || 30;
       p.pack = p.bulk ? (p.unit === 'ud' ? 1 : 1000) : (App.num($('#pack').value) || 1);
       const base = App.num($('#base').value); p.price = base > 0 ? base : 0;
       p.prices = p.prices || {}; p.log = p.log || [];

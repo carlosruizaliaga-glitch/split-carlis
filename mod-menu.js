@@ -1,4 +1,4 @@
-// Módulo Menú: semana (plantillas, sugerencias, copiar semana) y recetas editables.
+// Módulo Menú: semana (plantillas, sugerencias, copiar semana) y comidas editables con ingredientes para 1 persona.
 // Cada hueco (día + comida) es un dato propio para que los dos móviles puedan editar a la vez.
 (function () {
   'use strict';
@@ -6,6 +6,7 @@
   const esc = App.esc;
   let week = App.mondayOf(App.today());
   let recipeQuery = '', recipeMeal = '';
+  let selecting = false, selected = {}; // comidas elegidas: id → personas
 
   const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   const mealId = (date, meal) => `m-${date}-${meal}`;
@@ -14,7 +15,7 @@
   const fmtShort = d => new Date(d + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 
   function render(sub) {
-    if (sub === 'recipes') { App.fabAction = () => openRecipe(); renderRecipes(); }
+    if (sub === 'recipes') { App.fabAction = selecting ? null : () => openRecipe(); renderRecipes(); }
     else renderWeek();
   }
 
@@ -49,10 +50,11 @@
         <div class="row"><div class="grow"><b>${planned.length}/${totalSlots}</b> comidas planificadas</div>
         ${estimate ? `<div class="muted">≈ ${App.euros(estimate)} en comida</div>` : ''}</div>
         <div class="bar"><span style="width:${totalSlots ? planned.length / totalSlots * 100 : 0}%"></span></div>
+        <button class="primary block" id="pickDishes" style="margin-top:12px">📋 Planificar eligiendo comidas</button>
         <div class="section-label">Plantillas</div>
         <div class="chips">${C.MENU_TEMPLATES.map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
         <div class="btnrow"><button class="ghost" id="fillRandom">🎲 Sugerir huecos</button><button class="ghost" id="copyPrev">⎘ Copiar semana anterior</button></div>
-        ${planned.length ? `<button class="primary block" id="toList" style="margin-top:10px">🛒 Crear lista de la compra desde el menú</button>` : ''}
+        ${planned.length ? `<button class="block" id="toList" style="margin-top:10px">🛒 Crear lista de la compra desde el menú</button>` : ''}
       </div>`;
 
     dates.forEach((d, i) => {
@@ -61,7 +63,7 @@
         const slot = S.get(mealId(d, meal.id));
         const r = slot && slot.recipe && rById[slot.recipe];
         const label = r ? `${esc(r.emoji)} ${esc(r.name)}` : slot && slot.text ? `📝 ${esc(slot.text)}` : '';
-        const serv = slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} rac.</span>` : '';
+        const serv = slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '';
         h += `<div class="slot tap" data-slot="${d}|${meal.id}"><span class="slotmeal">${meal.emoji} ${esc(meal.name)}</span>
           <span class="grow slotval ${label ? '' : 'empty'}">${label || '＋ Añadir'}${serv}</span></div>`;
       });
@@ -77,6 +79,7 @@
     $('#fillRandom').onclick = fillRandom;
     $('#copyPrev').onclick = copyPrevWeek;
     if ($('#toList')) $('#toList').onclick = () => openMenuToList();
+    $('#pickDishes').onclick = () => { selecting = true; selected = {}; App.go('menu', 'recipes'); };
     if ($('#clearW')) $('#clearW').onclick = clearWeek;
     view.querySelectorAll('[data-slot]').forEach(el => el.onclick = () => { const [d, m] = el.dataset.slot.split('|'); openSlot(d, m); });
   }
@@ -147,13 +150,13 @@
     let showAll = false, q = '';
     const di = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
     const m = App.sheet(`<h3>${DAY_NAMES[di]} · ${esc(mdef.emoji)} ${esc(mdef.name)}</h3>
-      <div class="row" style="margin-top:8px"><span class="grow muted">Raciones</span>
+      <div class="row" style="margin-top:8px"><span class="grow muted">Personas que comen</span>
         <button class="qbtn" id="sMinus">−</button><b id="sVal" class="qval"></b><button class="qbtn" id="sPlus">+</button></div>
-      <input id="q" placeholder="🔍 Buscar receta" autocomplete="off" style="margin-top:10px">
+      <input id="q" placeholder="🔍 Buscar comida" autocomplete="off" style="margin-top:10px">
       <div class="chips" style="margin-top:8px">${['Fuera de casa', 'Sobras', 'Libre'].map(t => `<button data-text="${t}">${t}</button>`).join('')}</div>
       <div class="list" id="rlist" style="margin-top:6px"></div>
       <div class="row" style="margin-top:10px"><input id="free" placeholder="Otra cosa (texto libre)" class="grow" value="${esc(slot && slot.text ? slot.text : '')}"><button class="small" id="useFree">Usar</button></div>
-      <div class="actions">${slot ? '<button class="danger" id="clear">Quitar</button>' : ''}<button id="newR">＋ Nueva receta</button><button id="cancel">Cerrar</button></div>`);
+      <div class="actions">${slot ? '<button class="danger" id="clear">Quitar</button>' : ''}<button id="newR">＋ Nueva comida</button><button id="cancel">Cerrar</button></div>`);
     const $ = s => m.querySelector(s);
     const save = (recipe, text) => {
       S.put('meal', newMeal(date, meal, recipe, text, servings));
@@ -167,7 +170,7 @@
       if (!showAll && !ql) rs = fit;
       $('#rlist').innerHTML = rs.map(r => `<div class="item tap${slot && slot.recipe === r.id ? ' selected' : ''}" data-r="${r.id}"><div class="emoji">${esc(r.emoji)}</div>
           <div class="grow">${esc(r.name)}<div class="muted">${(r.meals || []).map(x => App.mealDef(x).name).join(' · ')}</div></div>${slot && slot.recipe === r.id ? '✓' : ''}</div>`).join('')
-        + (!showAll && !ql && fit.length < all.length ? `<div class="item tap" id="showAll"><div class="emoji">…</div><div class="grow muted">Ver todas las recetas</div></div>` : '')
+        + (!showAll && !ql && fit.length < all.length ? `<div class="item tap" id="showAll"><div class="emoji">…</div><div class="grow muted">Ver todas las comidas</div></div>` : '')
         + (!rs.length ? `<div class="muted" style="padding:10px 0">Sin resultados.</div>` : '');
       m.querySelectorAll('[data-r]').forEach(el => el.onclick = () => save(el.dataset.r, ''));
       const sa = $('#showAll'); if (sa) sa.onclick = () => { showAll = true; list(); };
@@ -184,17 +187,28 @@
     sv(); list();
   }
 
-  // ---------- Lista de la compra desde el menú ----------
+  // ---------- Lista de la compra a partir de comidas ----------
+  // Sirve para el menú de la semana y para comidas elegidas en el apartado Comidas.
   function openMenuToList() {
-    const store = App.currentStore(), pById = App.productsById(), rById = App.recipesById();
     const today = App.today();
-    let scope = week <= today && today <= App.addDays(week, 6) ? 'fromToday' : 'week';
+    const inWeek = week <= today && today <= App.addDays(week, 6);
+    openNeedsToList({
+      title: '🛒 Lista desde el menú',
+      scopes: [['week', 'Toda la semana'], ['fromToday', 'Desde hoy']],
+      scope: inWeek ? 'fromToday' : 'week',
+      getMeals: scope => weekMeals(week).filter(m => scope === 'week' || m.date >= today),
+      menuWeek: week
+    });
+  }
+
+  function openNeedsToList(opts) {
+    const store = App.currentStore(), pById = App.productsById(), rById = App.recipesById();
+    let scope = opts.scope;
     const listItems = App.shopItems().filter(i => !i.checked);
     let lines = [], picked = {};
 
     function compute() {
-      const ms = weekMeals(week).filter(m => scope === 'week' || m.date >= today);
-      const need = SL.menuNeeds(ms, rById);
+      const need = SL.menuNeeds(opts.getMeals(scope), rById);
       lines = Object.entries(need).map(([pid, amount]) => ({ product: pById[pid], amount }))
         .filter(l => l.product)
         .sort((a, b) => App.section(a.product.section).order - App.section(b.product.section).order || a.product.name.localeCompare(b.product.name, 'es'));
@@ -202,12 +216,12 @@
       lines.forEach(l => { picked[l.product.id] = !l.product.staple; });
     }
 
-    const m = App.sheet(`<h3>🛒 Lista desde el menú</h3>
+    const m = App.sheet(`<h3>${esc(opts.title)}</h3>
       <div class="muted">Marca lo que necesitas comprar. Lo de despensa sale desmarcado porque normalmente ya lo tenéis.</div>
-      <div class="seg" style="margin-top:10px"><button data-scope="week">Toda la semana</button><button data-scope="fromToday">Desde hoy</button></div>
+      ${opts.scopes ? `<div class="seg" style="margin-top:10px">${opts.scopes.map(([id, n]) => `<button data-scope="${id}">${n}</button>`).join('')}</div>` : ''}
       <div id="lines" class="list" style="margin-top:8px"></div>
       <div class="totalbar"><div class="grow"><b id="tot"></b><div class="muted" id="totsub"></div></div><button class="primary" id="add">Añadir</button></div>
-      <div class="actions"><button id="cancel">Cancelar</button></div>`);
+      <div class="actions"><button id="cancel">Cancelar</button></div>`, { stack: !!opts.stack });
     const $ = s => m.querySelector(s);
 
     function draw() {
@@ -224,7 +238,7 @@
           <div class="muted">necesitas ${esc(SL.fmtAmount(p.unit, l.amount))}${buy}${p.staple ? ' · <span class="badge">despensa</span>' : ''}${inList ? ' · <span class="badge">ya en la lista</span>' : ''}</div></div>
           <div class="amount">${cost != null ? App.euros(cost) : '—'}</div></label>`;
       });
-      $('#lines').innerHTML = h || '<div class="muted" style="padding:12px 0">No hay recetas con ingredientes en este periodo.</div>';
+      $('#lines').innerHTML = h || '<div class="muted" style="padding:12px 0">No hay comidas con ingredientes en este periodo.</div>';
       m.querySelectorAll('[data-p]').forEach(cb => cb.onchange = () => { picked[cb.dataset.p] = cb.checked; totals(); });
       totals();
     }
@@ -243,44 +257,163 @@
         const ex = listItems.find(i => i.product === l.product.id);
         if (ex) {
           // Si ya venía de este mismo menú, se sustituye la cantidad en lugar de sumarla.
-          const amount = ex.menuWeek === week ? l.amount : ex.amount + l.amount;
-          changes.push({ kind: 'shopitem', data: Object.assign({}, ex, { amount, menuWeek: week }) });
+          const amount = opts.menuWeek && ex.menuWeek === opts.menuWeek ? l.amount : ex.amount + l.amount;
+          changes.push({ kind: 'shopitem', data: Object.assign({}, ex, { amount, menuWeek: opts.menuWeek || ex.menuWeek }) });
         } else {
-          changes.push({ kind: 'shopitem', data: { id: 'i-' + App.uid(), product: l.product.id, name: l.product.name, section: l.product.section,
-            amount: l.amount, checked: false, source: 'menu', menuWeek: week, addedAt: Date.now() } });
+          changes.push({ kind: 'shopitem', data: { id: 'i-' + App.uid() + changes.length, product: l.product.id, name: l.product.name, section: l.product.section,
+            amount: l.amount, checked: false, source: 'menu', menuWeek: opts.menuWeek || null, addedAt: Date.now() } });
         }
       });
       S.putMany(changes);
       App.closeAllSheets();
+      if (opts.onDone) opts.onDone();
       App.toast(`Añadidos ${changes.length} productos a la lista`);
       App.go('shop', 'list');
     };
     compute(); draw();
   }
 
-  // ---------- Recetas ----------
+  // ---------- Comidas ----------
+  // Cada comida tiene sus ingredientes para 1 persona. Se pueden elegir varias
+  // para meterlas en el menú de la semana o pasar sus ingredientes a la lista.
   function renderRecipes() {
     const view = App.view, store = App.habitualStore(), pById = App.productsById();
     const ql = recipeQuery.trim().toLowerCase();
     const rs = App.recipes().filter(r => (!ql || r.name.toLowerCase().includes(ql)) && (!recipeMeal || (r.meals || []).includes(recipeMeal)));
-    let h = `<input id="rq" placeholder="🔍 Buscar receta" value="${esc(recipeQuery)}">
+    const nSel = Object.keys(selected).filter(id => S.get(id)).length;
+    let h = `<input id="rq" placeholder="🔍 Buscar comida" value="${esc(recipeQuery)}">
       <div class="chips scroll-x" style="margin-top:8px"><button data-rm="" class="${!recipeMeal ? 'on' : ''}">Todas</button>
-      ${C.MEALS.map(x => `<button data-rm="${x.id}" class="${recipeMeal === x.id ? 'on' : ''}">${x.emoji} ${x.name}</button>`).join('')}</div>
-      <div class="muted" style="margin-top:8px">${rs.length} receta${rs.length === 1 ? '' : 's'}${store ? ` · coste por ración en ${esc(store.name)}` : ''}</div>`;
+      ${C.MEALS.map(x => `<button data-rm="${x.id}" class="${recipeMeal === x.id ? 'on' : ''}">${x.emoji} ${x.name}</button>`).join('')}</div>`;
+    h += selecting
+      ? `<div class="note row"><div class="grow">Toca las comidas que quieres. <b>${nSel}</b> elegida${nSel === 1 ? '' : 's'}.</div><button class="small" id="selCancel">Cancelar</button></div>`
+      : `<div class="row" style="margin-top:8px"><div class="grow muted">${rs.length} comida${rs.length === 1 ? '' : 's'}${store ? ` · coste por persona en ${esc(store.name)}` : ''}</div>
+         <button class="small ghost" id="selStart">☑️ Elegir varias</button></div>`;
     h += rs.length ? `<div class="card list">${rs.map(r => {
       const cost = store ? recipeCost(r, store, pById) : 0;
-      return `<div class="item tap" data-r="${r.id}"><div class="emoji">${esc(r.emoji)}</div><div class="grow"><div class="ellipsis"><b>${esc(r.name)}</b></div>
+      const on = !!selected[r.id];
+      return `<div class="item tap${on ? ' selected' : ''}" data-r="${r.id}">${selecting ? `<span class="chk${on ? ' on' : ''}">${on ? '✓' : ''}</span>` : ''}
+        <div class="emoji">${esc(r.emoji)}</div><div class="grow"><div class="ellipsis"><b>${esc(r.name)}</b></div>
         <div class="muted ellipsis">${(r.meals || []).map(x => App.mealDef(x).name).join(' · ')} · ${(r.ingredients || []).length} ingredientes</div></div>
-        <div class="amount">${cost ? App.euros(cost) : ''}</div></div>`;
-    }).join('')}</div>` : `<div class="card empty">No hay recetas. Pulsa <b>+</b> para crear una.</div>`;
+        <div class="amount">${cost ? App.euros(cost) : ''}<div class="muted">${cost ? '/persona' : ''}</div></div></div>`;
+    }).join('')}</div>` : `<div class="card empty">No hay comidas${ql || recipeMeal ? ' con estos filtros' : ''}. Pulsa <b>+</b> para crear una.</div>`;
+    if (selecting && nSel) {
+      h += `<div style="height:64px"></div><div class="selbar"><div class="grow"><b>${nSel}</b> comida${nSel === 1 ? '' : 's'}</div>
+        <button class="small" id="selToMenu">📅 Al menú</button><button class="small primary" id="selToList">🛒 A la lista</button></div>`;
+    }
     view.innerHTML = h;
-    const rq = view.querySelector('#rq');
+    const $ = x => view.querySelector(x);
+    const rq = $('#rq');
     rq.oninput = () => {
       recipeQuery = rq.value; clearTimeout(rq._t);
       rq._t = setTimeout(() => { App.render(); const n = App.view.querySelector('#rq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300);
     };
     view.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { recipeMeal = b.dataset.rm; App.render(); });
-    view.querySelectorAll('[data-r]').forEach(el => el.onclick = () => openRecipe(S.get(el.dataset.r)));
+    view.querySelectorAll('[data-r]').forEach(el => el.onclick = () => {
+      if (!selecting) { openRecipe(S.get(el.dataset.r)); return; }
+      const id = el.dataset.r;
+      if (selected[id]) delete selected[id]; else selected[id] = App.defaultServings();
+      App.render();
+    });
+    if ($('#selStart')) $('#selStart').onclick = () => { selecting = true; selected = {}; App.render(); };
+    if ($('#selCancel')) $('#selCancel').onclick = () => { selecting = false; selected = {}; App.render(); };
+    if ($('#selToMenu')) $('#selToMenu').onclick = openAddToMenu;
+    if ($('#selToList')) $('#selToList').onclick = openSelectedToList;
+  }
+
+  const selectedRecipes = () => Object.keys(selected).map(id => S.get(id)).filter(Boolean);
+  const endSelection = () => { selecting = false; selected = {}; };
+
+  // Reparte las comidas elegidas en los huecos libres de la semana (se puede cambiar cada una).
+  function openAddToMenu() {
+    const rs = selectedRecipes();
+    const enabled = App.enabledMeals();
+    const thisW = App.mondayOf(App.today());
+    let target = week < thisW ? thisW : week;
+    let servings = App.defaultServings();
+    let assign = {};
+
+    const freeSlots = w => {
+      const out = [];
+      const today = App.today();
+      weekDates(w).forEach((d, i) => enabled.forEach(meal => {
+        // Solo días de hoy en adelante: no tiene sentido planificar el pasado.
+        if (d >= today && !S.get(mealId(d, meal.id))) out.push({ key: d + '|' + meal.id, d, meal, label: `${DAY_NAMES[i]} · ${meal.emoji} ${meal.name}` });
+      }));
+      return out;
+    };
+    function autoAssign() {
+      const free = freeSlots(target), used = new Set();
+      assign = {};
+      rs.forEach(r => {
+        // Primero un hueco de una comida que le encaje; si no hay, cualquiera libre (salvo desayuno).
+        let slot = null;
+        for (const mealType of (r.meals || [])) { slot = free.find(f => f.meal.id === mealType && !used.has(f.key)); if (slot) break; }
+        if (!slot) slot = free.find(f => !used.has(f.key) && f.meal.id !== 'desayuno');
+        if (slot) { used.add(slot.key); assign[r.id] = slot.key; } else assign[r.id] = '';
+      });
+    }
+    // Si a esta semana le quedan menos huecos que comidas elegidas, propone la siguiente.
+    if (target === thisW && freeSlots(thisW).length < rs.length) target = App.addDays(thisW, 7);
+    const m = App.sheet(`<h3>📅 Añadir al menú</h3>
+      <div class="muted">Se colocan en huecos libres. Cambia el día de cualquiera si quieres.</div>
+      <div class="seg" style="margin-top:10px"><button data-w="this">Esta semana</button><button data-w="next">La próxima</button></div>
+      <div class="row" style="margin-top:10px"><span class="grow muted">Personas que comen</span>
+        <button class="qbtn" id="sMinus">−</button><b id="sVal" class="qval"></b><button class="qbtn" id="sPlus">+</button></div>
+      <div class="list" id="assign" style="margin-top:6px"></div>
+      <div class="actions"><button id="cancel">Cancelar</button><button class="primary" id="ok">Añadir al menú</button></div>`);
+    const $ = x => m.querySelector(x);
+    function draw() {
+      m.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', (b.dataset.w === 'this') === (target === thisW)));
+      $('#sVal').textContent = servings;
+      const free = freeSlots(target);
+      $('#assign').innerHTML = rs.map(r => `<div class="item"><div class="emoji">${esc(r.emoji)}</div><div class="grow"><div class="ellipsis">${esc(r.name)}</div>
+        <select data-as="${r.id}" style="margin-top:4px">${free.map(f => `<option value="${f.key}" ${assign[r.id] === f.key ? 'selected' : ''}>${esc(f.label)}</option>`).join('')}
+        <option value="" ${!assign[r.id] ? 'selected' : ''}>— No añadir —</option></select></div></div>`).join('')
+        + (!free.length ? '<div class="muted" style="padding:8px 0">Esta semana no tiene huecos libres.</div>' : '');
+      m.querySelectorAll('[data-as]').forEach(sel => sel.onchange = () => { assign[sel.dataset.as] = sel.value; });
+    }
+    m.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { target = b.dataset.w === 'this' ? thisW : App.addDays(thisW, 7); autoAssign(); draw(); });
+    $('#sMinus').onclick = () => { servings = Math.max(1, servings - 1); draw(); };
+    $('#sPlus').onclick = () => { servings = Math.min(20, servings + 1); draw(); };
+    $('#cancel').onclick = App.closeSheet;
+    $('#ok').onclick = () => {
+      const keys = Object.values(assign).filter(Boolean);
+      if (new Set(keys).size !== keys.length) { App.toast('Hay dos comidas en el mismo hueco'); return; }
+      const changes = rs.filter(r => assign[r.id]).map(r => {
+        const [d, meal] = assign[r.id].split('|');
+        return { kind: 'meal', data: newMeal(d, meal, r.id, '', servings) };
+      });
+      if (!changes.length) { App.toast('No hay nada que añadir'); return; }
+      S.putMany(changes);
+      endSelection(); week = target;
+      App.closeSheet();
+      App.toast(`Añadidas ${changes.length} comidas al menú`);
+      App.go('menu', 'week');
+    };
+    autoAssign(); draw();
+  }
+
+  // Ingredientes de las comidas elegidas → lista, eligiendo cuántas personas comen cada una.
+  function openSelectedToList() {
+    const rs = selectedRecipes();
+    const m = App.sheet(`<h3>🛒 Comidas a la lista</h3>
+      <div class="muted">¿Para cuántas personas es cada comida? Las cantidades de cada comida son por persona.</div>
+      <div class="list" id="srv" style="margin-top:6px"></div>
+      <div class="actions"><button id="cancel">Cancelar</button><button class="primary" id="ok">Ver ingredientes</button></div>`);
+    const $ = x => m.querySelector(x);
+    function draw() {
+      $('#srv').innerHTML = rs.map(r => `<div class="item"><div class="emoji">${esc(r.emoji)}</div><div class="grow ellipsis">${esc(r.name)}</div>
+        <button class="qbtn" data-dn="${r.id}">−</button><b class="qval">${selected[r.id]}</b><button class="qbtn" data-up="${r.id}">+</button></div>`).join('');
+      m.querySelectorAll('[data-dn]').forEach(b => b.onclick = () => { selected[b.dataset.dn] = Math.max(1, selected[b.dataset.dn] - 1); draw(); });
+      m.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { selected[b.dataset.up] = Math.min(40, selected[b.dataset.up] + 1); draw(); });
+    }
+    $('#cancel').onclick = App.closeSheet;
+    $('#ok').onclick = () => openNeedsToList({
+      title: '🛒 Lista desde comidas', stack: true,
+      getMeals: () => rs.map(r => ({ recipe: r.id, servings: selected[r.id] })),
+      onDone: endSelection
+    });
+    draw();
   }
 
   function openRecipe(existing, opts) {
@@ -289,11 +422,11 @@
     const r = existing ? JSON.parse(JSON.stringify(existing))
       : { id: 'r-' + App.uid(), emoji: '🍽️', name: '', meals: opts.meals || ['comida', 'cena'], servings: 1, ingredients: [], notes: '' };
     const store = App.habitualStore();
-    const m = App.sheet(`<h3>${isNew ? 'Nueva receta' : 'Editar receta'}</h3>
+    const m = App.sheet(`<h3>${isNew ? 'Nueva comida' : 'Editar comida'}</h3>
       <div class="row"><div style="width:76px"><label>Emoji</label><input id="em" value="${esc(r.emoji)}" maxlength="8" class="center"></div>
         <div class="grow"><label>Nombre</label><input id="nm" value="${esc(r.name)}" maxlength="60" autocomplete="off"></div></div>
       <label>Para</label><div class="chips" id="meals"></div>
-      <label>Ingredientes por ración</label><div class="list" id="ings"></div>
+      <label>Ingredientes para 1 persona</label><div class="list" id="ings"></div>
       <button class="small" id="addIng" style="margin-top:6px">＋ Añadir ingrediente</button>
       <div class="muted" id="cost" style="margin-top:8px"></div>
       <label>Notas</label><textarea id="notes" rows="3" maxlength="1000" placeholder="Pasos, trucos…">${esc(r.notes || '')}</textarea>
@@ -321,10 +454,10 @@
     }
     function drawCost() {
       const c = store ? recipeCost(r, store, App.productsById()) : 0;
-      $('#cost').textContent = c ? `Coste aproximado por ración: ${App.euros(c)} (${store.name})` : '';
+      $('#cost').textContent = c ? `Coste aproximado por persona: ${App.euros(c)} (${store.name})` : '';
     }
     $('#addIng').onclick = () => App.pickProduct(p => {
-      if (r.ingredients.some(x => x.product === p.id)) { App.toast('Ya está en la receta'); return; }
+      if (r.ingredients.some(x => x.product === p.id)) { App.toast('Ya está en esta comida'); return; }
       const qty = p.unit === 'ud' ? 1 : p.unit === 'ml' ? 100 : 100;
       r.ingredients.push({ product: p.id, qty });
       drawIngs();
@@ -337,15 +470,15 @@
       r.ingredients = r.ingredients.filter(x => x.qty > 0);
       S.put('recipe', r);
       App.closeSheet();
-      App.toast('Receta guardada');
+      App.toast('Comida guardada');
       if (opts.onSaved) opts.onSaved(r);
     };
     const del = $('#del');
     if (del) del.onclick = async () => {
       const uses = App.meals().filter(x => x.recipe === r.id && x.date >= App.today()).length;
-      if (!await App.confirmDelete(uses ? `Esta receta está en ${uses} comida(s) planificada(s); quedarán vacías. ¿Eliminarla?` : `¿Eliminar la receta ${r.name}?`)) return;
+      if (!await App.confirmDelete(uses ? `Esta comida está en ${uses} hueco(s) del menú, que quedarán vacíos. ¿Eliminarla?` : `¿Eliminar ${r.name}?`)) return;
       App.closeSheet();
-      App.removeWithUndo('recipe', existing, 'Receta eliminada');
+      App.removeWithUndo('recipe', existing, 'Comida eliminada');
     };
     drawMeals(); drawIngs();
     if (isNew) setTimeout(() => $('#nm').focus(), 80);

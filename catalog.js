@@ -121,6 +121,12 @@
     ['p-vinagre', 'Vinagre (1 l)', 'despensa', 'ml', 1000, 0.65, 0],
     ['p-mayonesa', 'Mayonesa (450 ml)', 'despensa', 'ml', 450, 1.40, 0],
     ['p-soja', 'Salsa de soja (250 ml)', 'despensa', 'ml', 250, 1.30, 0],
+    ['p-pimienta', 'Pimienta negra molida (50 g)', 'despensa', 'g', 50, 1.20, 0],
+    ['p-oregano', 'Orégano (15 g)', 'despensa', 'g', 15, 0.85, 0],
+    ['p-comino', 'Comino molido (40 g)', 'despensa', 'g', 40, 0.95, 0],
+    ['p-ajo-polvo', 'Ajo en polvo (60 g)', 'despensa', 'g', 60, 1.10, 0],
+    ['p-laurel', 'Laurel (10 g)', 'despensa', 'g', 10, 0.80, 0],
+    ['p-curry', 'Curry (45 g)', 'despensa', 'g', 45, 1.10, 0],
     // Desayuno y dulces
     ['p-cafe', 'Café molido (250 g)', 'desayuno', 'g', 250, 2.75, 0],
     ['p-cacao', 'Cacao soluble (500 g)', 'desayuno', 'g', 500, 2.80, 0],
@@ -151,6 +157,10 @@
     ['p-papel-cocina', 'Papel de cocina (3 rollos)', 'limpieza', 'ud', 1, 2.30, 0],
     ['p-bolsas-basura', 'Bolsas de basura', 'limpieza', 'ud', 1, 1.30, 0],
     ['p-estropajos', 'Estropajos', 'limpieza', 'ud', 1, 1.00, 0],
+    ['p-bayetas', 'Bayetas (3 ud)', 'limpieza', 'ud', 1, 1.50, 0],
+    ['p-aluminio', 'Papel de aluminio', 'limpieza', 'ud', 1, 1.60, 0],
+    ['p-film', 'Papel film', 'limpieza', 'ud', 1, 1.40, 0],
+    ['p-servilletas', 'Servilletas', 'limpieza', 'ud', 1, 1.10, 0],
     // Higiene
     ['p-gel', 'Gel de ducha', 'higiene', 'ud', 1, 1.80, 0],
     ['p-champu', 'Champú', 'higiene', 'ud', 1, 1.80, 0],
@@ -163,8 +173,26 @@
     ['p-snacks-gato', 'Snacks para gato', 'mascota', 'ud', 1, 1.80, 0]
   ];
   // De despensa: al crear la lista desde el menú salen desmarcados (normalmente ya los tenéis).
-  const STAPLES = ['p-aove', 'p-girasol', 'p-sal', 'p-azucar', 'p-harina', 'p-pimenton', 'p-vinagre', 'p-soja', 'p-caldo', 'p-mayonesa'];
-  const PRODUCTS = P.map(([id, name, section, unit, pack, price, bulk]) => ({ id, name, section, unit, pack, price, bulk: !!bulk, staple: STAPLES.includes(id), prices: {} }));
+  const STAPLES = ['p-aove', 'p-girasol', 'p-sal', 'p-azucar', 'p-harina', 'p-pimenton', 'p-vinagre', 'p-soja', 'p-caldo', 'p-mayonesa',
+    'p-pimienta', 'p-oregano', 'p-comino', 'p-ajo-polvo', 'p-laurel', 'p-curry'];
+
+  // Esenciales: lo que se compra aunque no esté en el menú porque se gasta igualmente.
+  // [producto, cada cuántos días se suele reponer, cantidad a comprar en unidad base]
+  const ESSENTIALS = [
+    ['p-leche', 7, 6000], ['p-cafe', 14, 250], ['p-huevos', 10, 12], ['p-yogur', 7, 8], ['p-pan-molde', 7, 450], ['p-galletas', 14, 800], ['p-agua', 7, 9000],
+    ['p-aove', 30, 1000], ['p-sal', 90, 1000], ['p-azucar', 60, 1000], ['p-vinagre', 60, 1000],
+    ['p-pimienta', 90, 50], ['p-oregano', 120, 15], ['p-comino', 120, 40], ['p-pimenton', 90, 75], ['p-ajo-polvo', 120, 60], ['p-laurel', 180, 10],
+    ['p-bolsas-basura', 21, 1], ['p-papel-higienico', 14, 1], ['p-papel-cocina', 14, 1], ['p-servilletas', 30, 1],
+    ['p-pastillas-lavavajillas', 30, 1], ['p-lavavajillas-mano', 30, 1], ['p-detergente', 30, 1], ['p-suavizante', 30, 1],
+    ['p-friegasuelos', 30, 1], ['p-lejia', 45, 1], ['p-estropajos', 30, 1], ['p-bayetas', 30, 1], ['p-aluminio', 60, 1], ['p-film', 60, 1],
+    ['p-gel', 30, 1], ['p-champu', 30, 1], ['p-pasta-dientes', 30, 1], ['p-desodorante', 45, 1],
+    ['p-pienso', 21, 1], ['p-arena', 14, 1], ['p-latas-gato', 14, 1]
+  ];
+  const ESS = {}; ESSENTIALS.forEach(([id, every, qty]) => { ESS[id] = { every, qty }; });
+
+  const PRODUCTS = P.map(([id, name, section, unit, pack, price, bulk]) => Object.assign(
+    { id, name, section, unit, pack, price, bulk: !!bulk, staple: STAPLES.includes(id), prices: {} },
+    ESS[id] ? { essential: true, every: ESS[id].every, essentialQty: ESS[id].qty } : {}));
 
   // Recetas: cantidades POR RACIÓN, en la unidad base del producto.
   // meals: en qué comidas se sugiere (desayuno, comida, cena, tupper).
@@ -245,5 +273,5 @@
     { id: 'bebidas', name: 'Bebidas', emoji: '🧃', items: [['p-agua', 9000], ['p-cerveza', 12], ['p-refresco', 2000], ['p-zumo', 1000]] }
   ];
 
-  window.CATALOG = { SECTIONS, STORES, PRODUCTS, RECIPES, MEALS, MENU_TEMPLATES, SHOP_TEMPLATES, VERSION: 2 };
+  window.CATALOG = { SECTIONS, STORES, PRODUCTS, RECIPES, MEALS, MENU_TEMPLATES, SHOP_TEMPLATES, ESSENTIALS, VERSION: 3 };
 })();

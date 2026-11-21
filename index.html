@@ -175,6 +175,13 @@
     .item.shop .row + .row { margin-top: 2px; }
     .chk { width: 28px; height: 28px; border-radius: 9px; padding: 0; border: 2px solid var(--muted); background: none; color: var(--accent-ink); font-size: 15px; flex: none; }
     .chk.on { background: var(--accent); border-color: var(--accent); }
+    span.chk { display: inline-grid; place-items: center; }
+    .selbar { position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 8; max-width: 616px; margin: 0 auto;
+      display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+    .ess .chips button { background: var(--raise); }
+    .ess .chips button.due { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+    .ess-sum { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .every-input { width: 70px; text-align: right; padding: 8px; }
     .item.shop.done .nm { text-decoration: line-through; color: var(--muted); }
     .item.shop .cost { min-width: 62px; font-size: 14px; }
     .item.shop .qval { min-width: 46px; font-size: 13px; }

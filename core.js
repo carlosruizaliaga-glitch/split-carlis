@@ -131,7 +131,7 @@
   // ---------- Navegación ----------
   const MODS = [
     { id: 'split', icon: '💶', name: 'Gastos', title: 'Gastos', subs: [['balance', 'Saldo'], ['moves', 'Movimientos'], ['stats', 'Resumen']] },
-    { id: 'menu', icon: '🍽️', name: 'Menú', title: 'Menú semanal', subs: [['week', 'Semana'], ['recipes', 'Recetas']] },
+    { id: 'menu', icon: '🍽️', name: 'Menú', title: 'Menú semanal', subs: [['week', 'Semana'], ['recipes', 'Comidas']] },
     { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['compare', 'Comparar'], ['prices', 'Precios'], ['savings', 'Ahorro']] },
     { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [] }
   ];
@@ -222,7 +222,14 @@
     const st = App.settings();
     if ((st.catalogVersion || 1) < C.VERSION) {
       C.STORES.forEach(s => { if (!S.has(s.id)) changes.push({ kind: 'store', data: s }); });
-      C.PRODUCTS.forEach(p => { if (!S.has(p.id)) changes.push({ kind: 'product', data: p }); });
+      C.PRODUCTS.forEach(p => {
+        const cur = S.get(p.id);
+        if (!S.has(p.id)) changes.push({ kind: 'product', data: p });
+        // v3: marca como esenciales los productos que ya existían (sin tocar los que hayáis decidido).
+        else if (cur && p.essential && cur.essential === undefined) {
+          changes.push({ kind: 'product', data: Object.assign({}, cur, { essential: true, every: p.every, essentialQty: p.essentialQty }) });
+        }
+      });
       C.RECIPES.forEach(r => { if (!S.has(r.id)) changes.push({ kind: 'recipe', data: r }); });
       changes.push({ kind: 'settings', data: Object.assign({}, S.get('settings') || D.settings, {
         catalogVersion: C.VERSION, habitualStore: st.habitualStore || 's-mercadona',
