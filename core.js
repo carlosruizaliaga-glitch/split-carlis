@@ -67,6 +67,20 @@
   App.storeDot = s => `<span class="sdot" style="background:${esc(s.color || '#999')}"></span>`;
   App.srcBadge = src => src === 'estimado' ? '<span class="badge est" title="Precio orientativo">est.</span>'
     : src === 'web' ? '<span class="badge web">web</span>' : src === 'ticket' ? '<span class="badge real">ticket</span>' : '<span class="badge real">real</span>';
+  // ---------- Nutrición ----------
+  // IR = ingesta de referencia diaria de un adulto (etiquetado UE).
+  const RI = { kcal: 2000, p: 50, hc: 260, g: 70, fib: 25, sal: 6 };
+  const NUT_ROWS = [['kcal', 'Energía', 'kcal'], ['p', 'Proteínas', 'g'], ['hc', 'Hidratos', 'g'], ['g', 'Grasas', 'g'], ['fib', 'Fibra', 'g'], ['sal', 'Sal', 'g']];
+  App.fmtN = (v, k) => (v || 0).toLocaleString('es-ES', { maximumFractionDigits: k === 'kcal' ? 0 : (v || 0) < 10 ? 1 : 0 });
+  App.kcal = n => `${App.fmtN(n.kcal, 'kcal')} kcal`;
+  // Cuadrícula con energía, macros, fibra y sal, el % de la IR y el reparto de calorías.
+  App.nutGrid = function (n, opts) {
+    opts = opts || {};
+    const pk = n.p * 4, hk = n.hc * 4, gk = n.g * 9, tk = pk + hk + gk;
+    const bar = tk > 0 ? `<div class="macrobar"><span style="width:${pk / tk * 100}%;background:var(--m-p)"></span><span style="width:${hk / tk * 100}%;background:var(--m-hc)"></span><span style="width:${gk / tk * 100}%;background:var(--m-g)"></span></div>
+      <div class="macroleg"><span><i style="background:var(--m-p)"></i>Proteínas ${Math.round(pk / tk * 100)}%</span><span><i style="background:var(--m-hc)"></i>Hidratos ${Math.round(hk / tk * 100)}%</span><span><i style="background:var(--m-g)"></i>Grasas ${Math.round(gk / tk * 100)}%</span></div>` : '';
+    return `<div class="nutgrid">${NUT_ROWS.map(([k, lbl, u]) => `<div><b>${App.fmtN(n[k], k)}<small> ${u}</small></b><span>${lbl}</span>${opts.noRI ? '' : `<em>${Math.round((n[k] || 0) / RI[k] * 100)}% IR</em>`}</div>`).join('')}</div>${opts.noBar ? '' : bar}`;
+  };
   // Lee números escritos a la española o a la inglesa: "0,89", "0.89", "1.234,56", "3 €".
   App.num = v => {
     let s = String(v == null ? '' : v).trim().replace(/[€\s]/g, '');
@@ -340,8 +354,12 @@ Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
         const cur = S.get(p.id);
         if (!S.has(p.id)) changes.push({ kind: 'product', data: p });
         // v3: marca como esenciales los productos que ya existían (sin tocar los que hayáis decidido).
-        else if (cur && p.essential && cur.essential === undefined) {
-          changes.push({ kind: 'product', data: Object.assign({}, cur, { essential: true, every: p.every, essentialQty: p.essentialQty }) });
+        else if (cur) {
+          const patch = {};
+          if (p.essential && cur.essential === undefined) Object.assign(patch, { essential: true, every: p.every, essentialQty: p.essentialQty });
+          // v4: información nutricional (solo si el producto aún no tiene y sigue con la misma unidad).
+          if (p.nut && !cur.nut && cur.unit === p.unit) patch.nut = p.nut;
+          if (Object.keys(patch).length) changes.push({ kind: 'product', data: Object.assign({}, cur, patch) });
         }
       });
       C.RECIPES.forEach(r => { if (!S.has(r.id)) changes.push({ kind: 'recipe', data: r }); });

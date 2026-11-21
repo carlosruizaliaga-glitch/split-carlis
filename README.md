@@ -30,3 +30,7 @@ El plan gratuito de Supabase pausa el proyecto si pasa 1 semana sin ningún uso.
 ## Navegación y apariencia
 - **Atrás** (gesto o botón del móvil): cada pantalla, pestaña, hoja y diálogo es una entrada del historial; atrás cierra lo abierto o vuelve a la pantalla anterior hasta Inicio, y desde Inicio sale de la app.
 - **Ajustes** en apartados con subpágina. *Apariencia* (en cada móvil, archivo look.js): tema automático/claro/oscuro, color principal, fondo y tamaño de letra.
+
+## Nutrición
+- Cada alimento del catálogo trae kcal, proteínas, hidratos, grasas, fibra y sal (por 100 g/ml, o por unidad si se cuenta en unidades), editables en el producto.
+- Recetas: nutrición por persona con % de la ingesta de referencia (IR) y reparto de calorías. Menú e Inicio: kcal por persona de cada día. Lista: nutrición de cada línea y resumen por persona.

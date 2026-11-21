@@ -30,6 +30,17 @@
     return total / (r.servings || 1);
   }
 
+  // Nutrición por persona de una receta (con los ingredientes que tienen datos).
+  const nutOf = (r, pById) => SL.recipeNut(r, pById);
+  // Bloque «por persona» para fichas y editor.
+  function nutHtml(r, pById) {
+    const { nut, missing } = nutOf(r, pById);
+    if (!(r.ingredients || []).length) return '';
+    if (missing.length === r.ingredients.length) return '<div class="muted">Sus ingredientes aún no tienen información nutricional. Puedes añadirla en cada producto.</div>';
+    return App.nutGrid(nut) + (missing.length ? `<div class="muted" style="margin-top:6px">Sin datos de: ${missing.map(esc).join(', ')} (no se cuentan).</div>` : '')
+      + '<div class="muted" style="margin-top:6px">Valores orientativos. IR = ingesta de referencia diaria de un adulto.</div>';
+  }
+
   // ---------- Semana ----------
   function renderWeek() {
     const view = App.view;
@@ -58,7 +69,9 @@
       </div>`;
 
     dates.forEach((d, i) => {
-      h += `<div class="card day${d === today ? ' today' : ''}"><div class="dayhdr">${DAY_NAMES[i]} <span class="muted">${esc(fmtShort(d))}</span>${d === today ? ' <span class="pill pos">hoy</span>' : ''}</div>`;
+      let dayK = 0;
+      meals.forEach(meal => { const sl = S.get(mealId(d, meal.id)); const rr = sl && sl.recipe && rById[sl.recipe]; if (rr) dayK += nutOf(rr, pById).nut.kcal; });
+      h += `<div class="card day${d === today ? ' today' : ''}"><div class="dayhdr row"><span class="grow">${DAY_NAMES[i]} <span class="muted">${esc(fmtShort(d))}</span>${d === today ? ' <span class="pill pos">hoy</span>' : ''}</span>${dayK ? `<span class="kcal-pill">≈ ${App.fmtN(dayK, 'kcal')} kcal/pers.</span>` : ''}</div>`;
       meals.forEach(meal => {
         const slot = S.get(mealId(d, meal.id));
         const r = slot && slot.recipe && rById[slot.recipe];
@@ -293,7 +306,7 @@
       const on = !!selected[r.id];
       return `<div class="item tap${on ? ' selected' : ''}" data-r="${r.id}">${selecting ? `<span class="chk${on ? ' on' : ''}">${on ? '✓' : ''}</span>` : ''}
         <div class="emoji">${esc(r.emoji)}</div><div class="grow"><div class="ellipsis"><b>${esc(r.name)}</b></div>
-        <div class="muted ellipsis">${(r.meals || []).map(x => App.mealDef(x).name).join(' · ')} · ${(r.ingredients || []).length} ingredientes</div></div>
+        <div class="muted ellipsis">${(r.meals || []).map(x => App.mealDef(x).name).join(' · ')} · ${(r.ingredients || []).length} ingredientes${(() => { const k = nutOf(r, pById).nut.kcal; return k ? ` · <b>${App.fmtN(k, 'kcal')} kcal</b>` : ''; })()}</div></div>
         <div class="amount">${cost ? App.euros(cost) : ''}<div class="muted">${cost ? '/persona' : ''}</div></div></div>`;
     }).join('')}</div>` : `<div class="card empty">No hay recetas${ql || recipeMeal ? ' con estos filtros' : ''}. Pulsa <b>+</b> para crear una.</div>`;
     if (selecting && nSel) {
@@ -429,6 +442,7 @@
       <label>Ingredientes para 1 persona</label><div class="list" id="ings"></div>
       <button class="small" id="addIng" style="margin-top:6px">＋ Añadir ingrediente</button>
       <div class="muted" id="cost" style="margin-top:8px"></div>
+      <label>🥗 Nutrición por persona</label><div id="nut"></div>
       <label>Notas</label><textarea id="notes" rows="3" maxlength="1000" placeholder="Pasos, trucos…">${esc(r.notes || '')}</textarea>
       <div class="actions">${isNew ? '' : '<button class="danger" id="del">Eliminar</button>'}<button id="cancel">Cancelar</button><button class="primary" id="ok">Guardar</button></div>`, { stack: !!opts.onSaved });
     const $ = s => m.querySelector(s);
@@ -455,6 +469,7 @@
     function drawCost() {
       const c = store ? recipeCost(r, store, App.productsById()) : 0;
       $('#cost').textContent = c ? `Coste aproximado por persona: ${App.euros(c)} (${store.name})` : '';
+      $('#nut').innerHTML = nutHtml(r, App.productsById()) || '<div class="muted">Añade ingredientes para verla.</div>';
     }
     $('#addIng').onclick = () => App.pickProduct(p => {
       if (r.ingredients.some(x => x.product === p.id)) { App.toast('Ya está en esta comida'); return; }
@@ -498,6 +513,7 @@
         <button class="qbtn" id="sMinus">−</button><b id="sVal" class="qval"></b><button class="qbtn" id="sPlus">+</button></div>
       <div class="section-label">Ingredientes</div><div class="list tight" id="ings"></div>
       <div class="muted" id="cost" style="margin-top:8px"></div>
+      <div class="section-label">🥗 Nutrición por persona</div><div id="nut">${nutHtml(r, App.productsById()) || '<div class="muted">Sin ingredientes.</div>'}</div>
       ${r.notes ? `<div class="section-label">Notas</div><div class="note" style="white-space:pre-wrap">${esc(r.notes)}</div>` : ''}
       <div class="btnrow" style="margin-top:14px"><button class="primary" id="toMenu">📅 Al menú</button><button class="primary" id="toList">🛒 A la lista</button></div>
       <div class="actions">${slotRef ? '<button id="swap">🔁 Cambiar</button>' : ''}<button id="edit">✏️ Editar</button><button id="cancel">Cerrar</button></div>`);

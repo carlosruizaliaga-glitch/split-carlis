@@ -98,6 +98,7 @@
           </div></div>`;
       });
       h += `</div>`;
+      h += listNutCard(items, pById);
       if (checked.length) h += `<button class="primary block big-btn" id="finish">✅ Terminar compra · ${checked.length} producto${checked.length === 1 ? '' : 's'} · ${euros(inCart)}</button>`;
       h += `<div class="btnrow"><button class="ghost small" id="uncheck">Desmarcar todo</button><button class="danger small" id="clearList">Vaciar lista</button></div>`;
     }
@@ -207,6 +208,26 @@
       App.closeSheet();
       App.toast(changes.length ? `Añadidos ${changes.length} productos` : 'Ya tenías todo en la lista');
     });
+  }
+
+  // ---------- Nutrición ----------
+  const NUT_FIELDS = [['kcal', 'Energía (kcal)'], ['p', 'Proteínas (g)'], ['hc', 'Hidratos (g)'], ['g', 'Grasas (g)'], ['fib', 'Fibra (g)'], ['sal', 'Sal (g)']];
+  const NON_FOOD = ['limpieza', 'higiene', 'mascota'];
+  // Lo que aporta la comida de la lista, repartido entre las personas que coméis.
+  function listNutCard(items, pById) {
+    const tot = SL.emptyNut(); let n = 0, without = 0;
+    items.forEach(it => {
+      const p = it.product && pById[it.product];
+      if (!p || NON_FOOD.includes(p.section)) return;
+      const v = SL.nutFor(p, it.amount);
+      if (v) { SL.addNut(tot, v); n++; } else without++;
+    });
+    if (!n) return '';
+    const ppl = App.defaultServings(), per = SL.addNut(SL.emptyNut(), tot, 1 / ppl);
+    return `<details class="card"><summary class="row" style="cursor:pointer"><div class="emoji">🥗</div><div class="grow"><b>Nutrición de la lista</b>
+      <div class="muted">≈ ${App.kcal(per)} por persona (${ppl} personas) · ${App.fmtN(per.p)} g proteínas</div></div><span class="muted">▾</span></summary>
+      <div class="section-label">Por persona</div>${App.nutGrid(per, { noRI: true })}
+      <div class="muted" style="margin-top:8px">Suma de ${n} alimento${n === 1 ? '' : 's'} de la lista dividida entre ${ppl}.${without ? ` ${without} sin datos no se cuentan.` : ''} Equivale a ${(per.kcal / 2000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} días de 2.000 kcal.</div></details>`;
   }
 
   // ---------- Esenciales ----------
@@ -347,6 +368,9 @@
       ${p ? `<div class="muted" style="margin-top:4px">Si no coincide con la etiqueta, ponlo bien: se guarda para ${esc(store ? store.name : 'este súper')}.</div>` : ''}
       ${otherPrices.length > 1 ? `<label>En otros súpers</label><div class="list tight">${otherPrices.map((x, i) => `<div class="item">${App.storeDot(x.s)}<div class="grow">${esc(x.s.name)}${i === 0 ? ' <span class="pill pos">más barato</span>' : ''}</div><div class="amount">${euros(x.info.p)} ${App.srcBadge(x.info.src)}</div></div>`).join('')}</div>` : ''}
       <label>Nota</label><input id="note" value="${esc(it.note || '')}" maxlength="80" placeholder="Marca, tamaño…">
+      ${p && p.nut ? `<label>🥗 Nutrición ${p.unit === 'ud' ? 'por unidad' : p.unit === 'ml' ? 'por 100 ml' : 'por 100 g'}</label>${App.nutGrid(p.nut, { noRI: true })}
+        <div class="muted" style="margin-top:6px">Lo que hay en la lista (${esc(SL.fmtAmount(p.unit, it.amount))}): <b>${App.kcal(SL.nutFor(p, it.amount))}</b> · ${App.kcal(SL.nutFor(p, it.amount / App.defaultServings()))} por persona.</div>`
+        : p && !NON_FOOD.includes(p.section) ? '<div class="muted" style="margin-top:10px">🥗 Sin información nutricional: puedes añadirla en «Producto».</div>' : ''}
       <div class="actions"><button class="danger" id="del">Quitar</button>${p ? '<button id="editP">Producto</button>' : ''}<button class="primary" id="ok">Guardar</button></div>`);
     const $ = s => m.querySelector(s);
     const priceBefore = $('#price').value;
@@ -547,6 +571,9 @@
       <label class="row check-line"><input type="checkbox" id="staple" ${p.staple ? 'checked' : ''}> De despensa (al crear la lista desde el menú sale desmarcado)</label>
       <label class="row check-line"><input type="checkbox" id="essential" ${p.essential ? 'checked' : ''}> Esencial: lo compramos aunque no esté en el menú</label>
       <div class="row" id="everyRow" style="margin-top:6px"><span class="grow muted">Se suele reponer cada</span><input id="every" type="text" inputmode="numeric" autocomplete="off" step="1" class="every-input" value="${p.every || 30}"><span class="muted">días</span></div>
+      <div id="nutBox"><label>🥗 Información nutricional <span class="muted" id="nutPer"></span></label>
+        <div class="nutin">${NUT_FIELDS.map(([k, l]) => `<div><label>${l}</label><input data-nut="${k}" type="text" inputmode="decimal" autocomplete="off" value="${p.nut && p.nut[k] != null ? p.nut[k] : ''}"></div>`).join('')}</div>
+        <div class="muted" style="margin-top:4px">Viene en la etiqueta («por 100 g»). Se usa para calcular la nutrición por persona de las recetas.</div></div>
       <label id="priceLbl">Precios</label>
       <div class="list tight">${stores.map(s => {
         const r = p.prices && p.prices[s.id];
@@ -569,6 +596,12 @@
       $('#priceLbl').textContent = bulk ? 'Precio por kg / litro' : 'Precio por envase';
     };
     $('#bulk').onchange = syncBulk;
+    const syncNut = () => {
+      const u = $('#unit').value;
+      $('#nutPer').textContent = u === 'ud' ? '(por unidad)' : u === 'ml' ? '(por 100 ml)' : '(por 100 g)';
+      $('#nutBox').style.display = NON_FOOD.includes($('#sec').value) ? 'none' : '';
+    };
+    $('#unit').addEventListener('change', syncNut); $('#sec').addEventListener('change', syncNut); syncNut();
     const syncEss = () => { $('#everyRow').style.display = $('#essential').checked ? '' : 'none'; };
     $('#essential').onchange = syncEss; syncEss();
     const cleared = new Set();
@@ -585,6 +618,11 @@
       if (bad) { App.toast(`Precio no válido en ${(S.get(bad.dataset.ps) || {}).name || 'un súper'}`); bad.focus(); return; }
       if ($('#base').value.trim() && !(App.num($('#base').value) >= 0)) { App.toast('Precio orientativo no válido'); return; }
       if (!$('#bulk').checked && $('#pack').value.trim() && !(App.num($('#pack').value) > 0)) { App.toast('Tamaño del envase no válido'); return; }
+      const nutIns = [...m.querySelectorAll('[data-nut]')];
+      const badNut = nutIns.find(inp => inp.value.trim() && !(App.num(inp.value) >= 0));
+      if (badNut) { App.toast('Valor nutricional no válido'); badNut.focus(); return; }
+      if (nutIns.some(inp => inp.value.trim())) { p.nut = {}; nutIns.forEach(inp => { p.nut[inp.dataset.nut] = App.num(inp.value) || 0; }); }
+      else delete p.nut;
       p.section = $('#sec').value; p.bulk = $('#bulk').checked; p.unit = $('#unit').value; p.staple = $('#staple').checked;
       p.essential = $('#essential').checked; p.every = Math.round(App.num($('#every').value)) || p.every || 30;
       p.pack = p.bulk ? (p.unit === 'ud' ? 1 : 1000) : (App.num($('#pack').value) || 1);
@@ -612,7 +650,7 @@
       App.closeSheet();
       App.removeWithUndo('product', existing, 'Producto eliminado');
     };
-    syncBulk();
+    syncBulk(); syncNut();
     if (isNew && !opts.name) setTimeout(() => $('#nm').focus(), 80);
   }
 

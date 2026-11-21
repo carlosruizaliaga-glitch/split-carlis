@@ -8,16 +8,20 @@
   const listNames = (arr, n) => arr.slice(0, n).map(x => esc(shortName(x))).join(', ') + (arr.length > n ? '…' : '');
 
   function dayCard(date, title) {
-    const menu = App.modules.menu, rById = App.recipesById();
+    const menu = App.modules.menu, rById = App.recipesById(), pById = App.productsById();
+    const day = SL.emptyNut();
     const rows = App.enabledMeals().map(meal => {
       const slot = S.get(menu.mealId(date, meal.id));
       const r = slot && slot.recipe && rById[slot.recipe];
+      const rn = r ? SL.recipeNut(r, pById).nut : null;
+      if (rn) SL.addNut(day, rn);
       const label = r ? `${esc(r.emoji)} ${esc(r.name)}` : slot && slot.text ? `📝 ${esc(slot.text)}` : '';
       const serv = slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '';
       return `<div class="mealrow" data-slot="${date}|${meal.id}"><span class="when">${meal.emoji} ${esc(meal.name)}</span>
-        <span class="grow what ${label ? '' : 'none'}">${label || '＋ Elegir'}${serv}</span>${r ? '<span class="muted">›</span>' : ''}</div>`;
+        <span class="grow what ${label ? '' : 'none'}">${label || '＋ Elegir'}${serv}</span>${rn && rn.kcal ? `<span class="muted">${App.fmtN(rn.kcal, 'kcal')} kcal</span>` : ''}${r ? '<span class="muted">›</span>' : ''}</div>`;
     }).join('');
-    return `<div class="card"><div class="hhead"><span class="grow">${title}</span><button class="small ghost" data-go="menu">Ver semana ›</button></div>${rows}</div>`;
+    const tot = day.kcal ? `<div class="muted" style="margin-top:6px">Por persona: <b>${App.fmtN(day.kcal, 'kcal')} kcal</b> · ${App.fmtN(day.p)} g proteínas · ${App.fmtN(day.hc)} g hidratos · ${App.fmtN(day.g)} g grasas</div>` : '';
+    return `<div class="card"><div class="hhead"><span class="grow">${title}</span><button class="small ghost" data-go="menu">Ver semana ›</button></div>${rows}${tot}</div>`;
   }
 
   function render() {

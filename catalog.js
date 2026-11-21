@@ -190,8 +190,48 @@
   ];
   const ESS = {}; ESSENTIALS.forEach(([id, every, qty]) => { ESS[id] = { every, qty }; });
 
+  // Información nutricional orientativa (tablas de composición de alimentos):
+  // [kcal, proteínas g, hidratos g, grasas g, fibra g, sal g] por 100 g / 100 ml,
+  // o POR UNIDAD si el producto se cuenta en unidades (ud). Editable en cada producto.
+  const NUT = {
+    'p-tomate': [18, 0.9, 3.5, 0.2, 1.2, 0], 'p-cebolla': [40, 1.1, 9, 0.1, 1.7, 0], 'p-ajo': [149, 6.4, 33, 0.5, 2.1, 0],
+    'p-patata': [77, 2, 17, 0.1, 2.2, 0], 'p-zanahoria': [41, 0.9, 9.6, 0.2, 2.8, 0.2], 'p-pimiento-rojo': [31, 1, 6, 0.3, 2.1, 0],
+    'p-pimiento-verde': [20, 0.9, 4.6, 0.2, 1.7, 0], 'p-calabacin': [17, 1.2, 3.1, 0.3, 1, 0], 'p-berenjena': [25, 1, 5.9, 0.2, 3, 0],
+    'p-puerro': [61, 1.5, 14, 0.3, 1.8, 0], 'p-pepino': [15, 0.7, 3.6, 0.1, 0.5, 0], 'p-brocoli': [34, 2.8, 7, 0.4, 2.6, 0.1],
+    'p-lechuga': [45, 4, 8.7, 0.6, 3.9, 0.1], 'p-espinacas': [23, 2.9, 3.6, 0.4, 2.2, 0.2], 'p-champinon': [22, 3.1, 3.3, 0.3, 1, 0],
+    'p-perejil': [11, 0.9, 1.9, 0.2, 1, 0], 'p-aguacate': [240, 3, 12.8, 22, 10, 0], 'p-limon': [29, 1.1, 9.3, 0.3, 2.8, 0],
+    'p-platano': [89, 1.1, 22.8, 0.3, 2.6, 0], 'p-manzana': [52, 0.3, 13.8, 0.2, 2.4, 0], 'p-naranja': [47, 0.9, 11.8, 0.1, 2.4, 0],
+    'p-kiwi': [61, 1.1, 14.7, 0.5, 3, 0], 'p-fresas': [32, 0.7, 7.7, 0.3, 2, 0],
+    'p-pan-barra': [675, 22, 135, 4, 7, 3], 'p-pan-molde': [265, 9, 49, 4, 3, 1.1], 'p-pan-hamburguesa': [150, 5, 27, 2.5, 1.5, 0.6],
+    'p-tortillas-trigo': [125, 3.5, 20, 3.2, 1.2, 0.4], 'p-pan-tostado': [410, 12, 72, 6.5, 4.5, 1.3],
+    'p-pechuga': [110, 23, 0, 1.5, 0, 0.2], 'p-muslos': [180, 18, 0, 12, 0, 0.2], 'p-picada': [230, 18, 0, 17, 0, 0.2],
+    'p-lomo': [143, 21, 0, 6.5, 0, 0.15], 'p-ternera': [140, 21, 0, 6, 0, 0.15], 'p-pavo': [105, 23, 0, 1.2, 0, 0.15],
+    'p-hamburguesas': [230, 16, 3, 17, 0.5, 1.4], 'p-salchichas': [160, 8, 1.5, 14, 0, 1.1], 'p-costillas': [290, 17, 0, 25, 0, 0.2],
+    'p-salmon': [208, 20, 0, 13, 0, 0.1], 'p-merluza': [86, 17, 0, 2, 0, 0.2], 'p-bacalao': [82, 18, 0, 0.7, 0, 0.2],
+    'p-dorada': [100, 20, 0, 2, 0, 0.2], 'p-sardinas': [170, 21, 0, 9.5, 0, 0.3],
+    'p-serrano': [240, 30, 0, 13, 0, 4.8], 'p-york': [105, 18, 1.5, 3, 0, 2], 'p-pavo-lonchas': [100, 19, 2, 1.5, 0, 2],
+    'p-queso-lonchas': [290, 22, 1, 22, 0, 1.8], 'p-queso-rallado': [390, 28, 1, 30, 0, 1.6], 'p-mozzarella': [250, 18, 2, 19, 0, 0.5],
+    'p-queso-fresco': [175, 12, 3, 13, 0, 0.6], 'p-chorizo': [450, 24, 2, 38, 0, 4], 'p-bacon': [300, 15, 1, 26, 0, 2.5],
+    'p-leche': [46, 3.2, 4.7, 1.6, 0, 0.12], 'p-huevos': [78, 6.9, 0.4, 5.5, 0, 0.2], 'p-yogur': [77, 4.5, 5.5, 4, 0, 0.15],
+    'p-mantequilla': [740, 0.7, 0.6, 82, 0, 0.05], 'p-nata': [195, 2.5, 3.5, 19, 0, 0.08],
+    'p-arroz': [350, 7, 78, 0.6, 1.4, 0], 'p-macarrones': [355, 12, 71, 1.5, 3, 0], 'p-espaguetis': [355, 12, 71, 1.5, 3, 0],
+    'p-fideos': [355, 12, 71, 1.5, 3, 0], 'p-lentejas': [314, 24, 48, 1.8, 11, 0.05], 'p-garbanzos': [120, 7, 15, 2.5, 5, 0.6],
+    'p-alubias': [90, 6.5, 11, 0.5, 6, 0.6], 'p-tomate-frito': [75, 1.5, 9.5, 3.5, 1.5, 1.1], 'p-tomate-triturado': [25, 1.2, 4, 0.2, 1.5, 0.3],
+    'p-atun': [200, 25, 0, 11, 0, 1], 'p-aceitunas': [140, 1, 1, 14, 3.5, 3.5], 'p-aove': [820, 0, 0, 91, 0, 0], 'p-girasol': [820, 0, 0, 91, 0, 0],
+    'p-sal': [0, 0, 0, 0, 0, 100], 'p-azucar': [400, 0, 100, 0, 0, 0], 'p-harina': [345, 10, 73, 1.2, 3, 0], 'p-caldo': [5, 0.5, 0.4, 0.2, 0, 0.8],
+    'p-pimenton': [290, 14, 34, 13, 35, 0.1], 'p-vinagre': [20, 0, 0.5, 0, 0, 0], 'p-mayonesa': [680, 1, 1.5, 74, 0, 1.3], 'p-soja': [60, 8, 6, 0, 0, 14.5],
+    'p-pimienta': [250, 10, 64, 3, 25, 0.05], 'p-oregano': [265, 9, 69, 4, 42, 0], 'p-comino': [375, 18, 44, 22, 10, 0.4],
+    'p-ajo-polvo': [330, 17, 73, 0.7, 9, 0.1], 'p-laurel': [313, 7.6, 75, 8.4, 26, 0], 'p-curry': [325, 14, 56, 14, 53, 0.1],
+    'p-cafe': [20, 1, 3, 0, 0, 0], 'p-cacao': [380, 5, 82, 3, 6, 0.2], 'p-galletas': [440, 7, 75, 12, 2.5, 0.7], 'p-cereales': [380, 7, 84, 2, 3, 1],
+    'p-avena': [370, 13, 59, 7, 10, 0], 'p-mermelada': [250, 0.4, 60, 0, 1, 0], 'p-miel': [320, 0.4, 80, 0, 0, 0],
+    'p-guisantes': [80, 5.5, 10, 0.4, 5, 0], 'p-salteado': [45, 2, 7, 0.5, 3, 0.2], 'p-gambas': [85, 18, 0, 1, 0, 0.9], 'p-pizza': [900, 36, 105, 35, 7, 4.5],
+    'p-agua': [0, 0, 0, 0, 0, 0], 'p-cerveza': [140, 1.5, 11, 0, 0, 0], 'p-vino': [85, 0.1, 2.6, 0, 0, 0], 'p-refresco': [42, 0, 10.6, 0, 0, 0],
+    'p-zumo': [45, 0.7, 10, 0.2, 0.2, 0]
+  };
+  const nutObj = a => ({ kcal: a[0], p: a[1], hc: a[2], g: a[3], fib: a[4], sal: a[5] });
+
   const PRODUCTS = P.map(([id, name, section, unit, pack, price, bulk]) => Object.assign(
-    { id, name, section, unit, pack, price, bulk: !!bulk, staple: STAPLES.includes(id), prices: {} },
+    { id, name, section, unit, pack, price, bulk: !!bulk, staple: STAPLES.includes(id), prices: {} }, NUT[id] ? { nut: nutObj(NUT[id]) } : {},
     ESS[id] ? { essential: true, every: ESS[id].every, essentialQty: ESS[id].qty } : {}));
 
   // Recetas: cantidades POR RACIÓN, en la unidad base del producto.
@@ -273,5 +313,5 @@
     { id: 'bebidas', name: 'Bebidas', emoji: '🧃', items: [['p-agua', 9000], ['p-cerveza', 12], ['p-refresco', 2000], ['p-zumo', 1000]] }
   ];
 
-  window.CATALOG = { SECTIONS, STORES, PRODUCTS, RECIPES, MEALS, MENU_TEMPLATES, SHOP_TEMPLATES, ESSENTIALS, VERSION: 3 };
+  window.CATALOG = { SECTIONS, STORES, PRODUCTS, RECIPES, MEALS, MENU_TEMPLATES, SHOP_TEMPLATES, ESSENTIALS, VERSION: 4 };
 })();

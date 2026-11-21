@@ -138,7 +138,32 @@
     return { avg, max: cmp[cmp.length - 1].total };
   }
 
-  const api = { priceInfo, packsFor, lineCost, fmtAmount, stepFor, menuNeeds, compareStores, bestPair, alternatives, purchaseReference, round2 };
+  // ---------- Nutrición ----------
+  // p.nut va por 100 g / 100 ml, o por unidad si el producto se cuenta en unidades.
+  const NUT_KEYS = ['kcal', 'p', 'hc', 'g', 'fib', 'sal'];
+  const emptyNut = () => ({ kcal: 0, p: 0, hc: 0, g: 0, fib: 0, sal: 0 });
+  function nutFor(p, amount) {
+    if (!p || !p.nut) return null;
+    const f = p.unit === 'ud' ? amount : amount / 100;
+    const out = emptyNut();
+    NUT_KEYS.forEach(k => { out[k] = (+p.nut[k] || 0) * f; });
+    return out;
+  }
+  // Nutrición de una receta POR PERSONA. missing = ingredientes sin datos.
+  function recipeNut(r, productsById) {
+    const tot = emptyNut(), missing = [];
+    (r.ingredients || []).forEach(ing => {
+      const p = productsById[ing.product]; if (!p) return;
+      const n = nutFor(p, ing.qty / (r.servings || 1));
+      if (!n) { missing.push(p.name); return; }
+      NUT_KEYS.forEach(k => { tot[k] += n[k]; });
+    });
+    return { nut: tot, missing };
+  }
+  function addNut(a, b, factor) { NUT_KEYS.forEach(k => { a[k] += (b[k] || 0) * (factor == null ? 1 : factor); }); return a; }
+
+  const api = { priceInfo, packsFor, lineCost, fmtAmount, stepFor, menuNeeds, compareStores, bestPair, alternatives, purchaseReference, round2,
+    NUT_KEYS, emptyNut, nutFor, recipeNut, addNut };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ShopLogic = api;
 })(this);
