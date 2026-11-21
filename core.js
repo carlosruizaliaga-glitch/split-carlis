@@ -186,7 +186,31 @@
     if (S.version() !== lastVersion) App.render();
   });
 
+  // Si una pantalla falla, se muestra el error con un botón para recargar
+  // (en lugar de que la app parezca no hacer nada).
   App.render = function () {
+    try { renderInner(); } catch (e) { showFailure(e); }
+  };
+  function showFailure(e) {
+    console.error(e);
+    document.body.classList.remove('noapp');
+    view.innerHTML = `<div class="card"><b>⚠️ Algo ha fallado al abrir esta sección.</b>
+      <div class="muted" style="margin-top:6px">Suele arreglarse recargando la app. Si se repite, avisa con este mensaje:</div>
+      <div class="note" style="word-break:break-word">${esc(e && (e.stack || e.message) || e).slice(0, 400)}</div>
+      <button class="primary block" id="hardReload">🔄 Recargar la app</button></div>`;
+    view.querySelector('#hardReload').onclick = App.hardReload;
+  }
+  // Recarga borrando la caché de la app (los datos no se tocan).
+  App.hardReload = async function () {
+    try {
+      if (window.caches) for (const k of await caches.keys()) await caches.delete(k);
+      if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.update();
+    } catch (e) { console.warn(e); }
+    location.reload();
+  };
+  window.addEventListener('error', ev => { if (!view.innerHTML.trim()) showFailure(ev.error || ev.message); });
+
+  function renderInner() {
     lastVersion = S.version();
     if (!S.loggedIn()) { document.body.classList.add('noapp'); return renderLogin(); }
     ensureSeed();

@@ -39,6 +39,7 @@
         <div>Última sincronización: <b>${esc(last)}</b></div>
         <div class="muted">Cambios pendientes de subir: ${S.pending()}</div>
         <button class="block" id="syncNow" style="margin-top:10px">🔄 Sincronizar ahora</button>
+        <button class="block" id="hardReload" style="margin-top:8px">⬇️ Forzar actualización de la app</button>
         <button class="block danger" id="logout" style="margin-top:8px">Cerrar sesión en este móvil</button></div>
       <h2>💾 Copia de seguridad</h2><div class="card">
         <div class="muted">Los datos están en la nube y en cada móvil. Aun así, puedes guardar una copia.</div>
@@ -84,6 +85,7 @@
       putSettings({ rates: nr }); App.toast('Tipos de cambio guardados');
     };
     $('#syncNow').onclick = () => { S.syncNow(); App.toast('Sincronizando…'); };
+    $('#hardReload').onclick = App.hardReload;
     $('#logout').onclick = async () => {
       const pend = S.pending();
       const msg = pend ? `Hay ${pend} cambio(s) sin subir a la nube que se perderán.\n¿Cerrar sesión igualmente?` : '¿Cerrar sesión en este móvil? Los datos siguen en la nube; para volver a entrar necesitarás el código.';
