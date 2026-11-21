@@ -162,8 +162,50 @@
   }
   function addNut(a, b, factor) { NUT_KEYS.forEach(k => { a[k] += (b[k] || 0) * (factor == null ? 1 : factor); }); return a; }
 
+  // ---------- Despensa ----------
+  // Lo que queda NO se guarda: se calcula desde el último ajuste a mano (stock.qty en stock.at)
+  // sumando compras y restando comidas del menú y el gasto diario de los esenciales, en orden
+  // y sin bajar de 0. Así los dos móviles llegan al mismo número y nada se descuenta dos veces.
+  const DAY = 86400000;
+  const dayStart = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const mealTime = m => m.doneAt || (new Date(m.date + 'T00:00:00').getTime() + DAY); // al acabar su día
+  // Gasto diario de un esencial: lo que se suele comprar repartido entre los días de su frecuencia.
+  function dailyUse(p) {
+    if (!p || !p.essential || !(p.every > 0)) return 0;
+    return (p.essentialQty || p.pack || 1) / p.every;
+  }
+  // ctx: { purchases, meals, recipesById, now }
+  function stockLevel(stock, p, ctx) {
+    const pid = stock.product, ev = [];
+    (ctx.purchases || []).forEach(pu => {
+      const t = pu.createdAt || 0;
+      if (t <= stock.at || t > ctx.now) return;
+      (pu.items || []).forEach(i => { if (i.product === pid && i.amount > 0) ev.push([t, i.amount]); });
+    });
+    const perDay = dailyUse(p);
+    if (perDay) {
+      // Los esenciales bajan por su frecuencia (no por las recetas, para no contarlos dos veces).
+      for (let t = dayStart(stock.at) + DAY; t <= ctx.now; t += DAY) ev.push([t, -perDay]);
+    } else {
+      (ctx.meals || []).forEach(m => {
+        if (!m.recipe || m.skip) return;
+        const t = mealTime(m);
+        if (t <= stock.at || t > ctx.now) return;
+        const r = ctx.recipesById[m.recipe]; if (!r) return;
+        (r.ingredients || []).forEach(ing => {
+          if (ing.product === pid) ev.push([t, -(ing.qty * (m.servings || 2) / (r.servings || 1))]);
+        });
+      });
+    }
+    ev.sort((a, b) => a[0] - b[0]);
+    let q = Math.max(0, +stock.qty || 0);
+    ev.forEach(([, d]) => { q = Math.max(0, q + d); });
+    q = Math.round(q * 100) / 100;
+    return { qty: q, perDay, daysLeft: perDay ? q / perDay : null };
+  }
+
   const api = { priceInfo, packsFor, lineCost, fmtAmount, stepFor, menuNeeds, compareStores, bestPair, alternatives, purchaseReference, round2,
-    NUT_KEYS, emptyNut, nutFor, recipeNut, addNut };
+    NUT_KEYS, emptyNut, nutFor, recipeNut, addNut, stockLevel, dailyUse, mealTime };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ShopLogic = api;
 })(this);

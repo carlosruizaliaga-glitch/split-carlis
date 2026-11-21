@@ -28,7 +28,28 @@
   App.meals = () => S.list('meal');
   App.shopItems = () => S.list('shopitem');
   App.purchases = () => S.list('purchase').sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
-  App.section = id => C.SECTIONS.find(s => s.id === id) || C.SECTIONS[C.SECTIONS.length - 1];
+  // Secciones del súper (editables). Los productos guardan la «key» de su sección (p. ej. 'fruta').
+  App.sections = () => {
+    const l = S.list('section').sort(byOrder);
+    return l.length ? l.map(x => Object.assign({}, x, { id: x.key })) : C.SECTIONS;
+  };
+  App.section = key => { const l = App.sections(); return l.find(s => s.id === key) || l.find(s => s.id === 'otros') || l[l.length - 1]; };
+  App.shopTemplates = () => S.list('shoptpl').sort(byOrder);
+  App.menuTemplates = () => S.list('menutpl').sort(byOrder);
+
+  // Despensa: un registro «stock» por producto que se controla (lo comprado entra solo).
+  App.stockId = pid => 'stk-' + pid;
+  App.stocks = () => S.list('stock');
+  App.stockCtx = () => ({ purchases: App.purchases(), meals: App.meals(), recipesById: App.recipesById(), now: Date.now() });
+  // { pid: {qty, perDay, daysLeft, stock} } de todo lo que hay en la despensa.
+  App.pantry = (ctx) => {
+    ctx = ctx || App.stockCtx();
+    const out = {};
+    App.stocks().forEach(st => { const p = S.get(st.product); if (p) out[st.product] = Object.assign(SL.stockLevel(st, p, ctx), { stock: st }); });
+    return out;
+  };
+  // Ajuste a mano: fija lo que hay ahora (desde aquí se vuelve a calcular).
+  App.setStock = (pid, qty) => S.put('stock', { id: App.stockId(pid), product: pid, qty: Math.max(0, Math.round((+qty || 0) * 100) / 100), at: Date.now() });
   App.mealDef = id => C.MEALS.find(m => m.id === id) || { id, emoji: '🍴', name: id };
   App.enabledMeals = () => { const on = App.settings().meals || C.MEALS.map(m => m.id); return C.MEALS.filter(m => on.includes(m.id)); };
   App.defaultServings = () => App.settings().servings || 2;
@@ -168,7 +189,7 @@
     { id: 'split', icon: '💶', name: 'Gastos', title: 'Gastos', subs: [['balance', 'Saldo'], ['moves', 'Movimientos'], ['stats', 'Resumen']] },
     { id: 'menu', icon: '📅', name: 'Menú', title: 'Menú semanal', subs: [] },
     { id: 'recipes', icon: '🍳', name: 'Recetas', title: 'Recetas', subs: [] },
-    { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['compare', 'Comparar'], ['prices', 'Precios'], ['savings', 'Ahorro']] },
+    { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['pantry', 'Despensa'], ['prices', 'Productos'], ['compare', 'Comparar'], ['savings', 'Ahorro']] },
     { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [] }
   ];
   // La app siempre se abre en Inicio; de cada módulo se recuerda la última pestaña.
@@ -421,6 +442,11 @@ Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
         }
       });
       C.RECIPES.forEach(r => { if (!S.has(r.id)) changes.push({ kind: 'recipe', data: r }); });
+      if ((st.catalogVersion || 1) < 5) {
+        if (!S.list('section').length) C.SECTIONS.forEach((x, i) => changes.push({ kind: 'section', data: { id: 'sec-' + x.id, key: x.id, emoji: x.emoji, name: x.name, order: i } }));
+        if (!S.list('shoptpl').length) C.SHOP_TEMPLATES.forEach((t, i) => changes.push({ kind: 'shoptpl', data: { id: 'tpl-s-' + t.id, emoji: t.emoji, name: t.name, items: t.items, order: i } }));
+        if (!S.list('menutpl').length) C.MENU_TEMPLATES.forEach((t, i) => changes.push({ kind: 'menutpl', data: { id: 'tpl-m-' + t.id, emoji: t.emoji, name: t.name, plan: t.plan, order: i } }));
+      }
       changes.push({ kind: 'settings', data: Object.assign({}, S.get('settings') || D.settings, {
         catalogVersion: C.VERSION, habitualStore: st.habitualStore || 's-mercadona',
         meals: st.meals || C.MEALS.map(m => m.id), servings: st.servings || 2, pairThreshold: st.pairThreshold || 3

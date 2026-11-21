@@ -12,15 +12,18 @@
   const SIZE_NAMES = { s: 'Pequeña', m: 'Normal', l: 'Grande' };
 
   function render(sub) {
-    sub = TITLES[sub] ? sub : 'hub';
+    // Apartados de otros módulos (secciones, plantillas, esenciales: mod-edit.js).
+    const T = Object.assign({}, TITLES, App.settingsTitles || {}), P = Object.assign({}, PAGES, App.settingsPages || {});
+    sub = T[sub] ? sub : 'hub';
     const view = App.view;
-    view.innerHTML = sub === 'hub' ? hubHtml() : `<div class="subhead"><button class="icon" id="sback" aria-label="Volver a Ajustes">‹</button><b>${TITLES[sub]}</b></div>` + PAGES[sub].html();
+    view.innerHTML = sub === 'hub' ? hubHtml() : `<div class="subhead"><button class="icon" id="sback" aria-label="Volver a Ajustes">‹</button><b>${T[sub]}</b></div>` + P[sub].html();
     const $ = s => view.querySelector(s);
     const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
     on('#sback', () => history.back());
     view.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => App.go('settings', b.dataset.sub));
     view.querySelectorAll('[data-me]').forEach(b => b.onclick = () => { S.setMe(b.dataset.me); App.render(); });
-    if (sub !== 'hub') PAGES[sub].bind(view, $, on);
+    view.querySelectorAll('[data-link]').forEach(b => b.onclick = () => { const [m, s] = b.dataset.link.split('/'); App.go(m, s); });
+    if (sub !== 'hub') P[sub].bind(view, $, on);
   }
 
   function hubHtml() {
@@ -39,6 +42,12 @@
       <h2>Comida y compra</h2><div class="mlist">
         ${item('stores', '🛒', 'Supermercados', `${App.stores().length} súpers${habitual ? ' · habitual ' + esc(habitual.name) : ''}`)}
         ${item('menu', '🍽️', 'Menú y raciones', `${App.enabledMeals().length} comidas al día · ${App.defaultServings()} personas`)}
+        <button class="mrow" data-link="shop/prices"><span class="mic">🥫</span><span class="grow"><b>Productos</b><em>${App.products().length} productos · precios, envase y nutrición</em></span><span class="chev">›</span></button>
+        <button class="mrow" data-link="shop/pantry"><span class="mic">🏠</span><span class="grow"><b>Despensa</b><em>${App.stocks().length} productos en casa</em></span><span class="chev">›</span></button>
+        ${item('essentials', '🧂', 'Esenciales', `${App.products().filter(p => p.essential).length} productos · cada cuánto se reponen`)}
+        ${item('sections', '🏷️', 'Secciones del súper', `${App.sections().length} secciones · orden de la lista`)}
+        ${item('shoptpl', '📋', 'Plantillas de la lista', `${App.shopTemplates().length} plantillas`)}
+        ${item('menutpl', '📅', 'Plantillas del menú', `${App.menuTemplates().length} plantillas de semana`)}
       </div>
       <h2>La app</h2><div class="mlist">
         ${item('look', '🎨', 'Apariencia', `${THEME_NAMES[look.theme] || 'Automático'} · ${esc(acc[1])} · letra ${(SIZE_NAMES[look.size] || 'Normal').toLowerCase()}`)}

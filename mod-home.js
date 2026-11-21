@@ -54,10 +54,11 @@
     const pending = App.shopItems().filter(i => !i.checked);
     const cost = pending.reduce((a, i) => a + (App.modules.shop.itemCost(i, pById, store) || 0), 0);
     const inList = new Set(pending.map(i => i.product).filter(Boolean));
-    // Lo que piden las comidas de los próximos 7 días y no está en la lista (sin contar despensa).
-    const upcoming = App.meals().filter(m => m.date >= today && m.date <= App.addDays(today, 6));
-    const need = SL.menuNeeds(upcoming, rById);
-    const missing = Object.keys(need).map(id => pById[id]).filter(p => p && !p.staple && !inList.has(p.id));
+    // Lo que piden las comidas de los próximos 7 días y no hay ni en casa ni en la lista.
+    const upcoming = App.meals().filter(m => m.date >= today && m.date <= App.addDays(today, 6) && !m.skip && !m.doneAt);
+    const need = SL.menuNeeds(upcoming, rById), pan = App.pantry();
+    const missing = Object.keys(need).map(id => pById[id]).filter(p => p && !inList.has(p.id)
+      && (pan[p.id] ? need[p.id] > pan[p.id].qty + 0.001 : !p.staple));
     const due = App.modules.shop.essentialsStatus().filter(e => e.due && !e.inList);
 
     h += `<div class="card"><div class="hhead hcard" data-go="shop"><span class="grow">🛒 Compra</span><span class="go">Ver lista ›</span></div>

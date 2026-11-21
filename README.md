@@ -34,3 +34,9 @@ El plan gratuito de Supabase pausa el proyecto si pasa 1 semana sin ningún uso.
 ## Nutrición
 - Cada alimento del catálogo trae kcal, proteínas, hidratos, grasas, fibra y sal (por 100 g/ml, o por unidad si se cuenta en unidades), editables en el producto.
 - Recetas: nutrición por persona con % de la ingesta de referencia (IR) y reparto de calorías. Menú e Inicio: kcal por persona de cada día. Lista: nutrición de cada línea y resumen por persona.
+
+## Despensa, productos y editores
+- **Despensa** (Compra → Despensa): lo que hay en casa. Al terminar una compra entra lo comprado; las comidas del menú se descuentan al acabar su día (o antes con «Ya la hicimos»; «No la hicimos» no descuenta); los esenciales bajan solos según su frecuencia. Ajustable a mano (−/+, cantidad exacta, «Se ha acabado», quitar). Lo que queda se calcula (ajuste a mano + compras − menú − uso diario), así los dos móviles coinciden. La lista desde el menú y el aviso de Inicio solo piden lo que falta.
+- **Productos** (Compra → Productos): catálogo completo con buscador, 🛒 para añadir a la lista, elegir varios (mover de sección, esenciales, borrar), duplicar, recetas que lo usan y lo que hay en casa.
+- **Ajustes**: esenciales, secciones del súper (orden de la lista), plantillas de la lista y del menú (también «Guardar como plantilla» desde la lista y la semana).
+- Datos nuevos en `sc_items`: `stock`, `section`, `shoptpl`, `menutpl`.

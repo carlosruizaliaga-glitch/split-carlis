@@ -5,10 +5,12 @@
   const esc = App.esc, euros = App.euros;
   let compareScope = 'all', priceQuery = '', priceSection = '';
   let addQuery = '', tplOpen = false, essOpen = false;
+  let pSel = null; // productos elegidos en «Elegir varios» (Set) o null
 
   function render(sub) {
     if (sub === 'compare') renderCompare();
-    else if (sub === 'prices') { App.fabAction = () => openProduct(); renderPrices(); }
+    else if (sub === 'prices') { App.fabAction = pSel ? null : () => openProduct(); renderPrices(); }
+    else if (sub === 'pantry') { App.fabAction = () => App.pickProduct(p => App.modules.pantry.openStock(p)); App.modules.pantry.render(); }
     else if (sub === 'savings') renderSavings();
     else { App.fabAction = () => App.pickProduct(p => addProduct(p)); renderList(); }
   }
@@ -58,8 +60,8 @@
       <div class="btnrow" style="margin-top:10px"><button class="ghost" id="fromMenu">📅 Desde el menú</button><button class="ghost" id="fromRecipes">🍳 Desde recetas</button></div>
       ${items.length && !tplOpen ? `<button class="ghost block small" id="tplToggle">＋ Plantillas y repetir compra</button>` : `
       <div class="section-label">Plantillas</div>
-      <div class="chips">${C.SHOP_TEMPLATES.map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
-      <div class="btnrow"><button class="ghost" id="repeat">⎘ Repetir una compra</button></div>
+      <div class="chips">${App.shopTemplates().map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
+      <div class="btnrow"><button class="ghost" id="repeat">⎘ Repetir una compra</button>${items.length ? '<button class="ghost" id="saveTpl">💾 Guardar como plantilla</button>' : ''}</div>
       ${items.length ? '<button class="ghost block small" id="tplToggle">Ocultar plantillas</button>' : ''}`}
     </div>
     ${essentialsCard()}
@@ -105,10 +107,11 @@
     view.innerHTML = h;
     const $ = s => view.querySelector(s);
     view.querySelectorAll('[data-store]').forEach(b => b.onclick = () => { App.setCurrentStore(b.dataset.store); App.render(); });
-    view.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => applyTemplate(C.SHOP_TEMPLATES.find(t => t.id === b.dataset.tpl)));
+    view.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => applyTemplate(App.shopTemplates().find(t => t.id === b.dataset.tpl)));
     if ($('#fromMenu')) $('#fromMenu').onclick = () => App.go('menu', 'week');
     if ($('#fromRecipes')) $('#fromRecipes').onclick = () => App.modules.recipes.startPicking();
     if ($('#repeat')) $('#repeat').onclick = openRepeat;
+    if ($('#saveTpl')) $('#saveTpl').onclick = () => App.edit.saveListAsTemplate();
     if ($('#tplToggle')) $('#tplToggle').onclick = () => { tplOpen = !tplOpen; App.render(); };
     view.querySelectorAll('[data-chk]').forEach(b => b.onclick = () => {
       const it = S.get(b.dataset.chk); if (it) S.put('shopitem', Object.assign({}, it, { checked: !it.checked }));
@@ -244,13 +247,16 @@
   function essentialsStatus() {
     const last = lastBought(), today = Date.parse(App.today());
     const inList = new Set(App.shopItems().filter(i => !i.checked).map(i => i.product));
+    const pan = App.pantry();
     return App.products().filter(p => p.essential).map(p => {
-      const l = last[p.id];
+      const l = last[p.id], st = pan[p.id];
       const days = l ? Math.round((today - Date.parse(l)) / 86400000) : null;
-      return { p, days, due: days != null && days >= (p.every || 30), never: days == null, inList: inList.has(p.id) };
+      // Si está en la despensa manda lo que queda; si no, los días desde la última compra.
+      const due = st ? (st.qty <= 0 || (st.daysLeft != null && st.daysLeft < 3)) : days != null && days >= (p.every || 30);
+      return { p, days, due, never: days == null && !st, inList: inList.has(p.id), stock: st };
     }).sort((a, b) => App.section(a.p.section).order - App.section(b.p.section).order || a.p.name.localeCompare(b.p.name, 'es'));
   }
-  const essLabel = e => e.never ? '' : e.days === 0 ? 'hoy' : `hace ${e.days} d`;
+  const essLabel = e => e.stock ? (e.stock.qty <= 0 ? 'se acabó' : `quedan ~${Math.round(e.stock.daysLeft)} d`) : e.never ? '' : e.days === 0 ? 'hoy' : `hace ${e.days} d`;
   const shortName = n => n.replace(/\s*\(.*\)\s*$/, '');
 
   function essentialsCard() {
@@ -290,7 +296,7 @@
       S.putMany(due.map((e, i) => ({ kind: 'shopitem', data: newEssentialItem(e.p, i) })));
       App.toast(`Añadidos ${due.length} esenciales`);
     };
-    if ($('#essManage')) $('#essManage').onclick = openManageEssentials;
+    if ($('#essManage')) $('#essManage').onclick = () => App.go('settings', 'essentials');
   }
 
   function newEssentialItem(p, n) {
@@ -302,50 +308,6 @@
     if (App.shopItems().some(i => i.product === p.id && !i.checked)) { App.toast('Ya está en la lista'); return; }
     S.put('shopitem', newEssentialItem(p));
     App.toast(`Añadido: ${shortName(p.name)}`);
-  }
-
-  function openManageEssentials() {
-    const m = App.sheet(`<h3>🧂 Esenciales</h3>
-      <div class="muted">Cada cuántos días soléis reponer cada cosa. Cuando pasen esos días desde la última compra, saldrá en "Toca reponer".</div>
-      <div class="list tight" id="ess" style="margin-top:8px"></div>
-      <button class="small block" id="addEss">＋ Añadir esencial</button>
-      <div class="actions"><button class="primary" id="close">Listo</button></div>`);
-    const $ = s => m.querySelector(s);
-    function draw() {
-      const st = essentialsStatus();
-      let lastSec = null, h = '';
-      st.forEach(e => {
-        const sec = App.section(e.p.section);
-        if (sec.id !== lastSec) { h += `<div class="sechdr">${esc(sec.emoji)} ${esc(sec.name)}</div>`; lastSec = sec.id; }
-        h += `<div class="item"><div class="grow"><div class="ellipsis">${esc(e.p.name)}</div><div class="muted">${e.never ? 'aún sin comprar' : 'última compra ' + essLabel(e)}</div></div>
-          <span class="muted">cada</span><input type="text" inputmode="numeric" autocomplete="off" step="1" class="every-input" data-every="${e.p.id}" value="${e.p.every || 30}"><span class="muted">d</span>
-          <button class="xbtn" data-unset="${e.p.id}" aria-label="Quitar de esenciales">✕</button></div>`;
-      });
-      $('#ess').innerHTML = h || '<div class="muted" style="padding:8px 0">No hay esenciales.</div>';
-      m.querySelectorAll('[data-every]').forEach(inp => {
-        const saveEvery = () => {
-          const v = Math.round(App.num(inp.value));
-          const cur = S.get(inp.dataset.every);
-          if (!(v > 0) || !cur || cur.every === v) return;
-          S.put('product', Object.assign({}, cur, { every: v }));
-        };
-        inp.oninput = () => { clearTimeout(inp._t); inp._t = setTimeout(saveEvery, 600); };
-        inp.onchange = saveEvery; inp.onblur = saveEvery;
-      });
-      m.querySelectorAll('[data-unset]').forEach(b => b.onclick = () => {
-        const p = S.get(b.dataset.unset);
-        S.put('product', Object.assign({}, p, { essential: false }));
-        App.toast(`${shortName(p.name)} ya no es esencial`, { undo: () => S.put('product', Object.assign({}, S.get(p.id), { essential: true })) });
-        draw();
-      });
-    }
-    $('#addEss').onclick = () => App.pickProduct(p => {
-      S.put('product', Object.assign({}, p, { essential: true, every: p.every || 30, essentialQty: p.essentialQty || defaultAmount(p) }));
-      App.toast(`${shortName(p.name)} añadido a esenciales`);
-      draw();
-    });
-    $('#close').onclick = () => { m.querySelectorAll('[data-every]').forEach(i => i.onchange && i.onchange()); App.closeSheet(); };
-    draw();
   }
 
   // ---------- Editar una línea de la lista ----------
@@ -452,12 +414,19 @@
         changes.push({ kind: 'expense', data: exp });
       }
       changes.push({ kind: 'purchase', data: purchase });
+      // Lo comprado entra en la despensa: los productos nuevos empiezan a controlarse desde esta compra.
+      const tracked = new Set();
+      checked.forEach(i => {
+        if (!i.product || tracked.has(i.product) || S.get(App.stockId(i.product))) return;
+        tracked.add(i.product);
+        changes.push({ kind: 'stock', data: { id: App.stockId(i.product), product: i.product, qty: 0, at: purchase.createdAt - 1 } });
+      });
       checked.forEach(i => changes.push({ kind: 'shopitem', data: i, deleted: true }));
       S.putMany(changes);
       App.setCurrentStore(store.id);
       App.closeSheet();
       const sv = purchase.saving;
-      App.toast(sv > 0.5 ? `Compra guardada. Ahorráis ${euros(sv)} frente a la media 🎉` : 'Compra guardada');
+      App.toast(sv > 0.5 ? `Compra guardada y a la despensa. Ahorráis ${euros(sv)} frente a la media 🎉` : 'Compra guardada y a la despensa');
     };
     refresh();
   }
@@ -523,17 +492,20 @@
   }
 
   // ---------- Precios ----------
+  // ---------- Productos: catálogo completo, editable ----------
   function renderPrices(partial) {
     const view = App.view, habitual = App.habitualStore(), stores = App.compareStores();
     const ql = priceQuery.trim().toLowerCase();
-    const ps = App.products().filter(p => (!ql || p.name.toLowerCase().includes(ql)) && (!priceSection || p.section === priceSection))
+    const all = App.products();
+    const ps = all.filter(p => (!ql || p.name.toLowerCase().includes(ql)) && (!priceSection || p.section === priceSection))
       .sort((a, b) => App.section(a.section).order - App.section(b.section).order || a.name.localeCompare(b.name, 'es'));
-    const realCount = App.products().reduce((a, p) => a + Object.keys(p.prices || {}).length, 0);
-    let h = `<input id="pq" class="search" type="search" autocomplete="off" placeholder="🔍 Buscar producto" value="${esc(priceQuery)}">
+    const pan = App.pantry();
+    const inList = new Set(App.shopItems().filter(i => !i.checked).map(i => i.product));
+    const head = `<input id="pq" class="search" type="search" autocomplete="off" placeholder="🔍 Buscar producto" value="${esc(priceQuery)}">
       <div class="chips scroll-x" style="margin-top:8px"><button data-sec="" class="${!priceSection ? 'on' : ''}">Todo</button>
-      ${C.SECTIONS.map(s => `<button data-sec="${s.id}" class="${priceSection === s.id ? 'on' : ''}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
-      <div class="note">💡 ${realCount} precio${realCount === 1 ? '' : 's'} real${realCount === 1 ? '' : 'es'} apuntado${realCount === 1 ? '' : 's'}. Los marcados <span class="badge est">est.</span> son orientativos: toca un producto para poner el precio de la etiqueta.</div>`;
-    const head = h; h = '';
+      ${App.sections().map(s => `<button data-sec="${s.id}" class="${priceSection === s.id ? 'on' : ''}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>`;
+    let h = `<div class="row" style="margin-top:8px"><div class="grow muted">${ps.length === all.length ? `${all.length} productos` : `${ps.length} de ${all.length} productos`}${habitual ? ` · precio en ${esc(habitual.name)}` : ''}</div>
+      ${pSel ? '' : '<button class="small ghost" id="selP">☑️ Elegir varios</button>'}</div>`;
     let lastSec = null;
     ps.forEach(p => {
       const sec = App.section(p.section);
@@ -541,12 +513,24 @@
       const hi = habitual ? SL.priceInfo(p, habitual) : null;
       let min = null;
       stores.forEach(s => { const i = SL.priceInfo(p, s); if (i && (!min || i.p < min.info.p)) min = { s, info: i }; });
-      h += `<div class="item tap" data-p="${p.id}"><div class="grow"><div class="ellipsis">${esc(p.name)}</div>
-        <div class="muted ellipsis">${min && habitual && min.s.id !== habitual.id ? `más barato en ${esc(min.s.name)}: ${euros(min.info.p)}` : p.bulk ? 'a granel, precio por kg/l' : ''}</div></div>
-        <div class="amount">${hi ? euros(hi.p) + ' ' + App.srcBadge(hi.src) : '—'}</div></div>`;
+      const tags = [];
+      if (pan[p.id]) tags.push(`🏠 ${esc(SL.fmtAmount(p.unit, pan[p.id].qty))}`);
+      if (p.essential) tags.push('🧂 esencial');
+      if (min && habitual && min.s.id !== habitual.id) tags.push(`más barato en ${esc(min.s.name)}: ${euros(min.info.p)}`);
+      else if (p.bulk) tags.push('a granel, precio por kg/l');
+      const on = pSel && pSel.has(p.id);
+      h += `<div class="item${on ? ' selected' : ''}">${pSel ? `<span class="chk tap${on ? ' on' : ''}" data-p="${p.id}">${on ? '✓' : ''}</span>` : ''}
+        <div class="grow tap" data-p="${p.id}"><div class="ellipsis">${esc(p.name)}</div><div class="muted ellipsis">${tags.join(' · ')}</div></div>
+        <div class="amount tap" data-p="${p.id}">${hi ? euros(hi.p) + ' ' + App.srcBadge(hi.src) : '—'}</div>
+        ${pSel ? '' : `<button class="qbtn${inList.has(p.id) ? ' inlist' : ''}" data-addp="${p.id}" aria-label="Añadir a la lista">${inList.has(p.id) ? '✓' : '🛒'}</button>`}</div>`;
     });
     if (lastSec !== null) h += `</div>`;
-    if (!ps.length) h += `<div class="card empty">Sin productos.</div>`;
+    if (!ps.length) h += `<div class="card empty">Sin productos${ql ? ` con «${esc(priceQuery.trim())}»` : ''}. Pulsa <b>+</b> para crear uno.</div>`;
+    if (pSel) {
+      h += `<div style="height:64px"></div><div class="selbar"><div class="grow"><b>${pSel.size}</b> elegido${pSel.size === 1 ? '' : 's'}</div>
+        <button class="small" id="pSec" ${pSel.size ? '' : 'disabled'}>Sección</button><button class="small" id="pEss" ${pSel.size ? '' : 'disabled'}>🧂</button>
+        <button class="small danger" id="pDel" ${pSel.size ? '' : 'disabled'}>Borrar</button><button class="small" id="pCancel" aria-label="Terminar">✕</button></div>`;
+    }
     const body = view.querySelector('#pbody');
     if (partial) { if (!body) return; body.innerHTML = h; }
     else {
@@ -555,7 +539,55 @@
       pq.oninput = () => { priceQuery = pq.value; clearTimeout(pq._t); pq._t = setTimeout(() => renderPrices(true), 120); };
       view.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => { priceSection = b.dataset.sec; App.render(); });
     }
-    view.querySelectorAll('[data-p]').forEach(el => el.onclick = () => openProduct(S.get(el.dataset.p)));
+    const b = view.querySelector('#pbody'), $ = x => b.querySelector(x);
+    b.querySelectorAll('[data-p]').forEach(el => el.onclick = () => {
+      if (!pSel) { openProduct(S.get(el.dataset.p)); return; }
+      const id = el.dataset.p;
+      if (pSel.has(id)) pSel.delete(id); else pSel.add(id);
+      renderPrices(true);
+    });
+    b.querySelectorAll('[data-addp]').forEach(el => el.onclick = () => addProduct(S.get(el.dataset.addp)));
+    if ($('#selP')) $('#selP').onclick = () => { pSel = new Set(); App.render(); };
+    if ($('#pCancel')) $('#pCancel').onclick = () => { pSel = null; App.render(); };
+    if ($('#pSec')) $('#pSec').onclick = bulkSection;
+    if ($('#pEss')) $('#pEss').onclick = bulkEssential;
+    if ($('#pDel')) $('#pDel').onclick = bulkDelete;
+  }
+
+  const selProducts = () => [...(pSel || [])].map(id => S.get(id)).filter(Boolean);
+  function bulkSection() {
+    const ps = selProducts();
+    const m = App.sheet(`<h3>Mover ${ps.length} producto${ps.length === 1 ? '' : 's'} a…</h3>
+      <div class="list">${App.sections().map(s => `<div class="item tap" data-to="${s.id}"><div class="emoji">${esc(s.emoji)}</div><div class="grow">${esc(s.name)}</div></div>`).join('')}</div>
+      <div class="actions"><button id="cancel">Cancelar</button></div>`);
+    m.querySelector('#cancel').onclick = App.closeSheet;
+    m.querySelectorAll('[data-to]').forEach(el => el.onclick = () => {
+      const to = el.dataset.to, ids = new Set(ps.map(p => p.id));
+      pSel = null; // antes de guardar: el redibujado ya sale sin selección
+      S.putMany([...ps.map(p => ({ kind: 'product', data: Object.assign({}, p, { section: to }) })),
+        ...App.shopItems().filter(i => ids.has(i.product)).map(i => ({ kind: 'shopitem', data: Object.assign({}, i, { section: to }) }))]);
+      App.closeSheet(); App.toast(`Movidos a ${App.section(to).name}`);
+    });
+  }
+  function bulkEssential() {
+    const ps = selProducts();
+    const m = App.sheet(`<h3>🧂 Esenciales</h3><div class="muted">${ps.length} producto${ps.length === 1 ? '' : 's'} elegido${ps.length === 1 ? '' : 's'}.</div>
+      <div class="actions"><button id="off">Quitar de esenciales</button><button class="primary" id="on">Marcar como esenciales</button></div>`);
+    const apply = on => {
+      pSel = null;
+      S.putMany(ps.map(p => ({ kind: 'product', data: Object.assign({}, p, on ? { essential: true, every: p.every || 30, essentialQty: p.essentialQty || defaultAmount(p) } : { essential: false }) })));
+      App.closeSheet(); App.toast(on ? 'Marcados como esenciales' : 'Quitados de esenciales');
+    };
+    m.querySelector('#on').onclick = () => apply(true);
+    m.querySelector('#off').onclick = () => apply(false);
+  }
+  async function bulkDelete() {
+    const ps = selProducts();
+    const inRecipes = App.recipes().filter(r => (r.ingredients || []).some(i => pSel.has(i.product))).length;
+    if (!await App.confirmDelete(`¿Eliminar ${ps.length} producto${ps.length === 1 ? '' : 's'}?${inRecipes ? `\nSe usan en ${inRecipes} receta(s), que se quedarán sin ellos.` : ''}`)) return;
+    pSel = null;
+    S.putMany(ps.map(p => ({ kind: 'product', data: p, deleted: true })));
+    App.toast(`Eliminados ${ps.length} productos`, { undo: () => S.putMany(ps.map(p => ({ kind: 'product', data: p }))) });
   }
 
   // ---------- Ficha de producto ----------
@@ -563,11 +595,15 @@
     opts = opts || {};
     const isNew = !existing;
     const p = existing ? JSON.parse(JSON.stringify(existing))
+      : opts.copyFrom ? Object.assign(JSON.parse(JSON.stringify(opts.copyFrom)), { id: 'p-' + App.uid(), name: opts.copyFrom.name + ' (copia)', log: [] })
       : { id: 'p-' + App.uid(), name: opts.name || '', section: 'otros', unit: 'ud', pack: 1, price: 0, bulk: false, staple: false, prices: {} };
+    const uses = isNew ? [] : App.recipes().filter(r => (r.ingredients || []).some(i => i.product === p.id));
+    const stLvl = isNew ? null : App.pantry()[p.id];
     const stores = App.stores();
-    const m = App.sheet(`<h3>${isNew ? 'Nuevo producto' : 'Producto'}</h3>
+    const m = App.sheet(`<h3>${opts.copyFrom ? 'Copia de producto' : isNew ? 'Nuevo producto' : 'Producto'}</h3>
+      ${isNew ? '' : `<div class="btnrow" style="margin-top:6px"><button id="addL">🛒 A la lista</button><button id="stockEdit">🏠 ${stLvl ? esc(SL.fmtAmount(p.unit, stLvl.qty)) + ' en casa' : 'A la despensa'}</button><button id="dup">📋 Duplicar</button></div>`}
       <label>Nombre</label><input id="nm" value="${esc(p.name)}" maxlength="60" autocomplete="off" placeholder="Ej: Yogur griego (4 ud)">
-      <label>Sección</label><select id="sec">${C.SECTIONS.map(s => `<option value="${s.id}" ${s.id === p.section ? 'selected' : ''}>${s.emoji} ${esc(s.name)}</option>`).join('')}</select>
+      <label>Sección</label><select id="sec">${App.sections().map(s => `<option value="${s.id}" ${s.id === p.section ? 'selected' : ''}>${s.emoji} ${esc(s.name)}</option>`).join('')}</select>
       <label class="row check-line"><input type="checkbox" id="bulk" ${p.bulk ? 'checked' : ''}> Se compra a granel (precio por kg o litro)</label>
       <div class="row" id="packRow"><div class="grow"><label>Tamaño del envase</label><input id="pack" type="text" inputmode="decimal" autocomplete="off" value="${p.pack}"></div>
         <div style="width:110px"><label>Unidad</label><select id="unit">${[['g', 'gramos'], ['ml', 'ml'], ['ud', 'unidades']].map(([u, n]) => `<option value="${u}" ${u === p.unit ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
@@ -589,6 +625,7 @@
         const s = S.get(l.s) || { name: '¿?' };
         return `<div class="item"><div class="grow">${esc(s.name)} <span class="muted">${new Date(l.t).toLocaleDateString('es-ES')}</span></div><div class="amount">${euros(l.p)}</div></div>`;
       }).join('')}</div>` : ''}
+      ${uses.length ? `<label>Usado en ${uses.length} receta${uses.length === 1 ? '' : 's'}</label><div class="chips">${uses.map(r => `<button data-rcp="${r.id}">${esc(r.emoji)} ${esc(r.name)}</button>`).join('')}</div>` : ''}
       <div class="actions">${isNew ? '' : '<button class="danger" id="del">Eliminar</button>'}<button id="cancel">Cancelar</button><button class="primary" id="ok">Guardar</button></div>`, { stack: !!opts.stack || !!opts.onSaved });
     const $ = s => m.querySelector(s);
     const syncBulk = () => {
@@ -613,6 +650,10 @@
       const inp = m.querySelector(`[data-ps="${b.dataset.clr}"]`); inp.value = ''; inp.placeholder = 'se quitará';
     });
     $('#cancel').onclick = App.closeSheet;
+    if ($('#addL')) $('#addL').onclick = () => addProduct(S.get(p.id) || existing);
+    if ($('#stockEdit')) $('#stockEdit').onclick = () => App.modules.pantry.openStock(S.get(p.id) || existing, { stack: true });
+    if ($('#dup')) $('#dup').onclick = () => { App.closeSheet(); openProduct(null, { copyFrom: S.get(p.id) || existing }); };
+    m.querySelectorAll('[data-rcp]').forEach(b => b.onclick = () => App.modules.menu.openRecipeCard(S.get(b.dataset.rcp)));
     $('#ok').onclick = () => App.safely('guardar el producto', () => {
       p.name = $('#nm').value.trim();
       if (!p.name) { App.toast('Ponle un nombre'); return; }
@@ -733,5 +774,5 @@
     };
   }
 
-  App.modules.shop = { render, openProduct, addProduct, essentialsStatus, newEssentialItem, itemCost };
+  App.modules.shop = { render, openProduct, addProduct, essentialsStatus, newEssentialItem, itemCost, defaultAmount, essLabel };
 })();

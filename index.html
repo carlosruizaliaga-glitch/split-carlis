@@ -249,12 +249,21 @@
     .sugg { max-height: calc(var(--vvh, 70vh) - var(--hdr, 120px) - 64px); overflow-y: auto; overscroll-behavior: contain; }
     input[type=search] { -webkit-appearance: none; appearance: none; }
     .sugg .sitem.new { position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--line); }
+    /* Despensa, productos y editores */
+    .item.pan .bar { height: 4px; margin-top: 5px; }
+    .item.pan .pq { min-width: 54px; font-size: 13px; }
+    .qbtn.inlist { background: var(--pos-soft); color: var(--pos); }
+    #subtabs .seg button { font-size: 13px; padding: 8px 2px; }
+    .tplrow { padding: 3px 0; } .tplrow select { padding: 8px 10px; font-size: 15px; }
+    .essrow { align-items: flex-start; }
+    .essin { gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .essin input { width: 70px; padding: 6px 8px; text-align: right; }
   </style>
-  <script src="look.js?v=12"></script>
+  <script src="look.js?v=13"></script>
 </head>
 <body class="noapp">
   <header>
-    <img src="cats-wide.jpg?v=12" alt="Monchi y Hierba" class="cats">
+    <img src="cats-wide.jpg?v=13" alt="Monchi y Hierba" class="cats">
     <div><h1 id="title">Split Carlis</h1><div class="sub" id="subtitle"></div></div>
     <button id="syncBtn" aria-label="Sincronizar"><span class="dot" id="syncDot"></span><span id="syncTxt"></span></button>
   </header>
@@ -262,17 +271,19 @@
   <main id="view"></main>
   <button class="fab" id="fab" aria-label="Añadir" hidden>+</button>
   <nav class="tabs" id="nav"></nav>
-  <script src="logic.js?v=12"></script>
-  <script src="shoplogic.js?v=12"></script>
-  <script src="store.js?v=12"></script>
-  <script src="defaults.js?v=12"></script>
-  <script src="catalog.js?v=12"></script>
-  <script src="core.js?v=12"></script>
-  <script src="mod-home.js?v=12"></script>
-  <script src="mod-split.js?v=12"></script>
-  <script src="mod-menu.js?v=12"></script>
-  <script src="mod-shop.js?v=12"></script>
-  <script src="mod-settings.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="logic.js?v=13"></script>
+  <script src="shoplogic.js?v=13"></script>
+  <script src="store.js?v=13"></script>
+  <script src="defaults.js?v=13"></script>
+  <script src="catalog.js?v=13"></script>
+  <script src="core.js?v=13"></script>
+  <script src="mod-home.js?v=13"></script>
+  <script src="mod-split.js?v=13"></script>
+  <script src="mod-menu.js?v=13"></script>
+  <script src="mod-shop.js?v=13"></script>
+  <script src="mod-pantry.js?v=13"></script>
+  <script src="mod-edit.js?v=13"></script>
+  <script src="mod-settings.js?v=13"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

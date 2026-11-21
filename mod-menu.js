@@ -63,8 +63,9 @@
         <div class="bar"><span style="width:${totalSlots ? planned.length / totalSlots * 100 : 0}%"></span></div>
         <button class="primary block" id="pickDishes" style="margin-top:12px">🍳 Planificar eligiendo recetas</button>
         <div class="section-label">Plantillas</div>
-        <div class="chips">${C.MENU_TEMPLATES.map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
+        <div class="chips">${App.menuTemplates().map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
         <div class="btnrow"><button class="ghost" id="fillRandom">🎲 Sugerir huecos</button><button class="ghost" id="copyPrev">⎘ Copiar semana anterior</button></div>
+        ${planned.length ? '<button class="ghost block small" id="saveWeekTpl">💾 Guardar esta semana como plantilla</button>' : ''}
         ${planned.length ? `<button class="block" id="toList" style="margin-top:10px">🛒 Crear lista de la compra desde el menú</button>` : ''}
       </div>`;
 
@@ -75,8 +76,9 @@
       meals.forEach(meal => {
         const slot = S.get(mealId(d, meal.id));
         const r = slot && slot.recipe && rById[slot.recipe];
-        const label = r ? `${esc(r.emoji)} ${esc(r.name)}` : slot && slot.text ? `📝 ${esc(slot.text)}` : '';
-        const serv = slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '';
+        const label = r ? `${esc(r.emoji)} ${slot.skip ? `<s>${esc(r.name)}</s>` : esc(r.name)}` : slot && slot.text ? `📝 ${esc(slot.text)}` : '';
+        const serv = (slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '')
+          + (slot && slot.doneAt ? ' <span class="pill pos">✓</span>' : '') + (slot && slot.skip ? ' <span class="pill zero">no se hizo</span>' : '');
         h += `<div class="slot tap" data-slot="${d}|${meal.id}"><span class="slotmeal">${meal.emoji} ${esc(meal.name)}</span>
           <span class="grow slotval ${label ? '' : 'empty'}">${label || '＋ Añadir'}${serv}</span></div>`;
       });
@@ -88,9 +90,19 @@
     $('#prevW').onclick = () => { week = App.addDays(week, -7); App.render(); };
     $('#nextW').onclick = () => { week = App.addDays(week, 7); App.render(); };
     if ($('#thisW')) $('#thisW').onclick = () => { week = App.mondayOf(today); App.render(); };
-    view.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => applyTemplate(C.MENU_TEMPLATES.find(t => t.id === b.dataset.tpl)));
+    view.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => applyTemplate(App.menuTemplates().find(t => t.id === b.dataset.tpl)));
     $('#fillRandom').onclick = fillRandom;
     $('#copyPrev').onclick = copyPrevWeek;
+    if ($('#saveWeekTpl')) $('#saveWeekTpl').onclick = () => {
+      const plan = {};
+      weekDates(week).forEach((d, i) => App.enabledMeals().forEach(meal => {
+        const sl = S.get(mealId(d, meal.id));
+        if (!sl || !sl.recipe) return;
+        plan[meal.id] = plan[meal.id] || [null, null, null, null, null, null, null];
+        plan[meal.id][i] = sl.recipe;
+      }));
+      App.edit.openMenuTemplate(null, { plan });
+    };
     if ($('#toList')) $('#toList').onclick = () => openMenuToList();
     $('#pickDishes').onclick = startPicking;
     if ($('#clearW')) $('#clearW').onclick = clearWeek;
@@ -169,6 +181,8 @@
       <div class="chips" style="margin-top:8px">${['Fuera de casa', 'Sobras', 'Libre'].map(t => `<button data-text="${t}">${t}</button>`).join('')}</div>
       <div class="list" id="rlist" style="margin-top:6px"></div>
       <div class="row" style="margin-top:10px"><input id="free" placeholder="Otra cosa (texto libre)" class="grow" value="${esc(slot && slot.text ? slot.text : '')}"><button class="small" id="useFree">Usar</button></div>
+      ${slot && slot.recipe && date <= App.today() ? `<div class="section-label">Despensa</div><div class="muted">Sus ingredientes se descuentan de la despensa al acabar el día.</div>
+        <div class="btnrow"><button id="done" class="${slot.doneAt ? 'primary' : ''}">✓ ${slot.doneAt ? 'Hecha' : 'Ya la hicimos'}</button><button id="skip" class="${slot.skip ? 'primary' : ''}">✗ ${slot.skip ? 'No se hizo' : 'No la hicimos'}</button></div>` : ''}
       <div class="actions">${slot ? '<button class="danger" id="clear">Quitar</button>' : ''}<button id="newR">＋ Nueva receta</button><button id="cancel">Cerrar</button></div>`);
     const $ = s => m.querySelector(s);
     const save = (recipe, text) => {
@@ -197,6 +211,16 @@
     $('#cancel').onclick = App.closeSheet;
     $('#newR').onclick = () => openRecipe(null, { meals: [meal], onSaved: r => save(r.id, '') });
     if ($('#clear')) $('#clear').onclick = () => { App.closeSheet(); App.removeWithUndo('meal', slot, 'Comida quitada'); };
+    if ($('#done')) $('#done').onclick = () => {
+      const cur = S.get(slot.id) || slot;
+      S.put('meal', Object.assign({}, cur, { doneAt: cur.doneAt ? null : Date.now(), skip: false }));
+      App.closeSheet(); App.toast(cur.doneAt ? 'Se descontará al acabar el día' : 'Hecha: descontada de la despensa');
+    };
+    if ($('#skip')) $('#skip').onclick = () => {
+      const cur = S.get(slot.id) || slot;
+      S.put('meal', Object.assign({}, cur, { skip: !cur.skip, doneAt: null }));
+      App.closeSheet(); App.toast(cur.skip ? 'Se descontará al acabar el día' : 'No se descontará de la despensa');
+    };
     sv(); list();
   }
 
@@ -220,17 +244,22 @@
     const listItems = App.shopItems().filter(i => !i.checked);
     let lines = [], picked = {};
 
+    const pan = App.pantry();
     function compute() {
       const need = SL.menuNeeds(opts.getMeals(scope), rById);
-      lines = Object.entries(need).map(([pid, amount]) => ({ product: pById[pid], amount }))
+      // Solo se compra lo que falta: lo que pide el menú menos lo que hay en casa.
+      lines = Object.entries(need).map(([pid, amount]) => {
+        const have = pan[pid] ? pan[pid].qty : 0;
+        return { product: pById[pid], need: amount, have, tracked: !!pan[pid], amount: Math.max(0, Math.round((amount - have) * 100) / 100) };
+      })
         .filter(l => l.product)
         .sort((a, b) => App.section(a.product.section).order - App.section(b.product.section).order || a.product.name.localeCompare(b.product.name, 'es'));
       picked = {};
-      lines.forEach(l => { picked[l.product.id] = !l.product.staple; });
+      lines.forEach(l => { picked[l.product.id] = l.amount > 0 && !(l.product.staple && !l.tracked); });
     }
 
     const m = App.sheet(`<h3>${esc(opts.title)}</h3>
-      <div class="muted">Marca lo que necesitas comprar. Lo de despensa sale desmarcado porque normalmente ya lo tenéis.</div>
+      <div class="muted">Marca lo que necesitas comprar. Se descuenta lo que ya hay en la despensa; lo básico (aceite, sal…) que no controláis sale desmarcado.</div>
       ${opts.scopes ? `<div class="seg" style="margin-top:10px">${opts.scopes.map(([id, n]) => `<button data-scope="${id}">${n}</button>`).join('')}</div>` : ''}
       <div id="lines" class="list" style="margin-top:8px"></div>
       <div class="totalbar"><div class="grow"><b id="tot"></b><div class="muted" id="totsub"></div></div><button class="primary" id="add">Añadir</button></div>
@@ -243,12 +272,13 @@
       lines.forEach(l => {
         const p = l.product, sec = App.section(p.section);
         if (sec.id !== lastSec) { h += `<div class="sechdr">${esc(sec.emoji)} ${esc(sec.name)}</div>`; lastSec = sec.id; }
-        const cost = store ? SL.lineCost({ amount: l.amount }, p, store) : null;
+        const cost = store && l.amount ? SL.lineCost({ amount: l.amount }, p, store) : l.amount ? null : 0;
         const inList = listItems.find(i => i.product === p.id);
-        const buy = p.bulk ? '' : ` · compras ${SL.packsFor(p, l.amount)} ud`;
-        h += `<label class="item check"><input type="checkbox" data-p="${p.id}" ${picked[p.id] ? 'checked' : ''}>
+        const buy = !l.amount ? '' : p.bulk ? '' : ` · compras ${SL.packsFor(p, l.amount)} ud`;
+        const home = l.tracked ? (l.amount ? ` · en casa ${esc(SL.fmtAmount(p.unit, l.have))}, faltan ${esc(SL.fmtAmount(p.unit, l.amount))}` : ' · <span class="pos">ya lo tenéis en casa</span>') : '';
+        h += `<label class="item check"><input type="checkbox" data-p="${p.id}" ${picked[p.id] ? 'checked' : ''} ${l.amount ? '' : 'disabled'}>
           <div class="grow"><div class="ellipsis">${esc(p.name)}</div>
-          <div class="muted">necesitas ${esc(SL.fmtAmount(p.unit, l.amount))}${buy}${p.staple ? ' · <span class="badge">despensa</span>' : ''}${inList ? ' · <span class="badge">ya en la lista</span>' : ''}</div></div>
+          <div class="muted">el menú pide ${esc(SL.fmtAmount(p.unit, l.need))}${home}${buy}${p.staple && !l.tracked ? ' · <span class="badge">despensa</span>' : ''}${inList ? ' · <span class="badge">ya en la lista</span>' : ''}</div></div>
           <div class="amount">${cost != null ? App.euros(cost) : '—'}</div></label>`;
       });
       $('#lines').innerHTML = h || '<div class="muted" style="padding:12px 0">No hay comidas con ingredientes en este periodo.</div>';
@@ -256,7 +286,7 @@
       totals();
     }
     function totals() {
-      const sel = lines.filter(l => picked[l.product.id]);
+      const sel = lines.filter(l => picked[l.product.id] && l.amount > 0);
       const sum = sel.reduce((a, l) => a + (store ? SL.lineCost({ amount: l.amount }, l.product, store) || 0 : 0), 0);
       $('#tot').textContent = `${sel.length} producto${sel.length === 1 ? '' : 's'} · ${App.euros(sum)}`;
       $('#totsub').textContent = store ? `Precios de ${store.name}` : '';
@@ -266,7 +296,7 @@
     $('#cancel').onclick = App.closeSheet;
     $('#add').onclick = () => {
       const changes = [];
-      lines.filter(l => picked[l.product.id]).forEach(l => {
+      lines.filter(l => picked[l.product.id] && l.amount > 0).forEach(l => {
         const ex = listItems.find(i => i.product === l.product.id);
         if (ex) {
           // Si ya venía de este mismo menú, se sustituye la cantidad en lugar de sumarla.
