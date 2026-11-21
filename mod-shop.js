@@ -90,7 +90,8 @@
         h += `<div class="item shop${it.checked ? ' done' : ''}">
           <button class="chk${it.checked ? ' on' : ''}" data-chk="${it.id}" aria-label="Marcar">${it.checked ? '✓' : ''}</button>
           <div class="grow">
-            <div class="row"><div class="grow nm tap" data-item="${it.id}">${esc(it.name)}</div><div class="amount cost">${cost != null ? euros(cost) : '—'}</div></div>
+            <div class="row"><div class="grow nm tap" data-item="${it.id}">${esc(it.name)}</div><div class="amount cost">${cost != null ? euros(cost) : '—'}</div>
+              <button class="xbtn" data-del="${it.id}" aria-label="Quitar de la lista">✕</button></div>
             <div class="row"><div class="grow muted ellipsis tap" data-item="${it.id}">${sub}</div>
               <button class="qbtn" data-minus="${it.id}" aria-label="Menos">−</button><span class="qval">${esc(p ? (p.bulk ? SL.fmtAmount(p.unit, it.amount) : SL.packsFor(p, it.amount)) : it.amount)}</span><button class="qbtn" data-plus="${it.id}" aria-label="Más">+</button></div>
           </div></div>`;
@@ -112,6 +113,7 @@
     view.querySelectorAll('[data-item]').forEach(el => el.onclick = () => openItem(S.get(el.dataset.item)));
     view.querySelectorAll('[data-minus]').forEach(b => b.onclick = () => changeQty(S.get(b.dataset.minus), -1));
     view.querySelectorAll('[data-plus]').forEach(b => b.onclick = () => changeQty(S.get(b.dataset.plus), +1));
+    view.querySelectorAll('[data-del]').forEach(b => b.onclick = () => removeItem(S.get(b.dataset.del)));
     if ($('#finish')) $('#finish').onclick = openFinish;
     if ($('#uncheck')) $('#uncheck').onclick = () => S.putMany(App.shopItems().filter(i => i.checked).map(i => ({ kind: 'shopitem', data: Object.assign({}, i, { checked: false }) })));
     if ($('#clearList')) $('#clearList').onclick = async () => {
@@ -146,9 +148,17 @@
     if (addQuery) { draw(); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 
+  function removeItem(it) {
+    if (!it) return;
+    App.removeWithUndo('shopitem', it, `Quitado: ${it.name}`);
+  }
+
   function changeQty(it, dir) {
     if (!it) return;
     const p = it.product ? S.get(it.product) : null;
+    // "−" con la cantidad mínima: se quita de la lista (con opción de deshacer).
+    const atMin = !p ? (it.amount || 1) <= 1 : p.bulk ? it.amount <= SL.stepFor(p) : SL.packsFor(p, it.amount) <= 1;
+    if (dir < 0 && atMin) { removeItem(it); return; }
     let na;
     if (!p) na = Math.max(1, (it.amount || 1) + dir);
     else if (p.bulk) na = Math.max(SL.stepFor(p), Math.round((it.amount + dir * SL.stepFor(p)) * 100) / 100);
