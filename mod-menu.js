@@ -165,7 +165,7 @@
     const m = App.sheet(`<h3>${DAY_NAMES[di]} · ${esc(mdef.emoji)} ${esc(mdef.name)}</h3>
       <div class="row" style="margin-top:8px"><span class="grow muted">Personas que comen</span>
         <button class="qbtn" id="sMinus">−</button><b id="sVal" class="qval"></b><button class="qbtn" id="sPlus">+</button></div>
-      <input id="q" placeholder="🔍 Buscar comida" autocomplete="off" style="margin-top:10px">
+      <div class="sheethead" style="margin-top:2px"><input id="q" class="search" type="search" enterkeyhint="done" placeholder="🔍 Buscar receta" autocomplete="off"></div>
       <div class="chips" style="margin-top:8px">${['Fuera de casa', 'Sobras', 'Libre'].map(t => `<button data-text="${t}">${t}</button>`).join('')}</div>
       <div class="list" id="rlist" style="margin-top:6px"></div>
       <div class="row" style="margin-top:10px"><input id="free" placeholder="Otra cosa (texto libre)" class="grow" value="${esc(slot && slot.text ? slot.text : '')}"><button class="small" id="useFree">Usar</button></div>
@@ -289,7 +289,8 @@
   // ---------- Comidas ----------
   // Cada comida tiene sus ingredientes para 1 persona. Se pueden elegir varias
   // para meterlas en el menú de la semana o pasar sus ingredientes a la lista.
-  function renderRecipes() {
+  // partial = solo redibuja los resultados (al escribir en el buscador no se toca el campo).
+  function renderRecipes(partial) {
     const view = App.view, store = App.habitualStore(), pById = App.productsById();
     const ql = recipeQuery.trim().toLowerCase();
     const rs = App.recipes().filter(r => (!ql || r.name.toLowerCase().includes(ql)) && (!recipeMeal || (r.meals || []).includes(recipeMeal)));
@@ -297,6 +298,7 @@
     let h = `<input id="rq" placeholder="🔍 Buscar receta" value="${esc(recipeQuery)}">
       <div class="chips scroll-x" style="margin-top:8px"><button data-rm="" class="${!recipeMeal ? 'on' : ''}">Todas</button>
       ${C.MEALS.map(x => `<button data-rm="${x.id}" class="${recipeMeal === x.id ? 'on' : ''}">${x.emoji} ${x.name}</button>`).join('')}</div>`;
+    const head = h; h = '';
     h += selecting
       ? `<div class="note row"><div class="grow">Toca las recetas que quieres. <b>${nSel}</b> elegida${nSel === 1 ? '' : 's'}.</div><button class="small" id="selCancel">Cancelar</button></div>`
       : `<div class="row" style="margin-top:8px"><div class="grow muted">${rs.length} receta${rs.length === 1 ? '' : 's'}${store ? ` · coste por persona en ${esc(store.name)}` : ''}</div>
@@ -313,14 +315,15 @@
       h += `<div style="height:64px"></div><div class="selbar"><div class="grow"><b>${nSel}</b> receta${nSel === 1 ? '' : 's'}</div>
         <button class="small" id="selToMenu">📅 Al menú</button><button class="small primary" id="selToList">🛒 A la lista</button></div>`;
     }
-    view.innerHTML = h;
     const $ = x => view.querySelector(x);
-    const rq = $('#rq');
-    rq.oninput = () => {
-      recipeQuery = rq.value; clearTimeout(rq._t);
-      rq._t = setTimeout(() => { App.render(); const n = App.view.querySelector('#rq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300);
-    };
-    view.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { recipeMeal = b.dataset.rm; App.render(); });
+    if (partial) { if (!$('#rbody')) return; $('#rbody').innerHTML = h; }
+    else {
+      view.innerHTML = head + `<div id="rbody">${h}</div>`;
+      const rq = $('#rq');
+      rq.setAttribute('type', 'search'); rq.setAttribute('autocomplete', 'off'); rq.classList.add('search');
+      rq.oninput = () => { recipeQuery = rq.value; clearTimeout(rq._t); rq._t = setTimeout(() => renderRecipes(true), 120); };
+      view.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { recipeMeal = b.dataset.rm; App.render(); });
+    }
     view.querySelectorAll('[data-r]').forEach(el => el.onclick = () => {
       if (!selecting) { openRecipeCard(S.get(el.dataset.r)); return; }
       const id = el.dataset.r;

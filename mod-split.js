@@ -70,7 +70,7 @@
   }
 
   // ---------- Movimientos ----------
-  function renderMoves() {
+  function renderMoves(partial) {
     const view = App.view, gs = App.groups();
     const allMonths = [...new Set([...App.expenses(), ...App.payments()].map(x => App.monthOf(x.date)))].sort().reverse();
     const txt = filters.text.trim().toLowerCase();
@@ -91,7 +91,8 @@
     gs.forEach(g => { h += `<button data-g="${g.id}" class="${filters.group === g.id ? 'on' : ''}">${esc(g.emoji)} ${esc(g.name)}</button>`; });
     h += `</div><div class="row" style="margin-top:8px"><select id="month" class="grow"><option value="">Todos los meses</option>
       ${allMonths.map(m => `<option value="${m}" ${filters.month === m ? 'selected' : ''}>${esc(App.fmtMonth(m))}</option>`).join('')}</select>
-      <input id="q" class="grow" placeholder="🔍 Buscar" value="${esc(filters.text)}"></div>`;
+      <input id="q" class="grow search" type="search" autocomplete="off" placeholder="🔍 Buscar" value="${esc(filters.text)}"></div>`;
+    const head = h; h = '';
     const total = items.filter(i => i.kind === 'exp').reduce((a, i) => a + L.expenseShares(i.e).total, 0);
     if (items.length) h += `<div class="muted" style="margin-top:8px">${items.length} movimiento${items.length > 1 ? 's' : ''} · gastos ${eur(total)}</div>`;
     if (!items.length) {
@@ -121,14 +122,15 @@
       });
       h += `</div>`;
     }
-    view.innerHTML = h;
-    view.querySelectorAll('[data-g]').forEach(el => el.onclick = () => { filters.group = el.dataset.g; App.render(); });
-    view.querySelector('#month').onchange = ev => { filters.month = ev.target.value; App.render(); };
-    const q = view.querySelector('#q');
-    q.oninput = () => {
-      filters.text = q.value; clearTimeout(q._t);
-      q._t = setTimeout(() => { App.render(); const n = App.view.querySelector('#q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 350);
-    };
+    const body = view.querySelector('#mbody');
+    if (partial) { if (!body) return; body.innerHTML = h; }
+    else {
+      view.innerHTML = head + `<div id="mbody">${h}</div>`;
+      view.querySelectorAll('[data-g]').forEach(el => el.onclick = () => { filters.group = el.dataset.g; App.render(); });
+      view.querySelector('#month').onchange = ev => { filters.month = ev.target.value; App.render(); };
+      const q = view.querySelector('#q');
+      q.oninput = () => { filters.text = q.value; clearTimeout(q._t); q._t = setTimeout(() => renderMoves(true), 150); };
+    }
     view.querySelectorAll('[data-exp]').forEach(el => el.onclick = () => openExpense(S.get(el.dataset.exp)));
     view.querySelectorAll('[data-pay]').forEach(el => el.onclick = () => openPayment(S.get(el.dataset.pay)));
   }

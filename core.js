@@ -275,9 +275,66 @@
 
   // Si una pantalla falla, se muestra el error con un botón para recargar
   // (en lugar de que la app parezca no hacer nada).
+  // Si al redibujar (p. ej. llega una sincronización) estabas escribiendo en un campo de la pantalla,
+  // se mantiene el texto, el cursor y el teclado abierto.
   App.render = function () {
+    const ae = document.activeElement;
+    let keep = null;
+    if (ae && view.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) {
+      // El campo se reconoce por su id o, si no tiene, por su primer atributo data-*.
+      const da = [...ae.attributes].find(a => a.name.startsWith('data-'));
+      const sel = ae.id ? '#' + CSS.escape(ae.id) : da ? `[${da.name}="${CSS.escape(da.value)}"]` : null;
+      if (sel) keep = { sel, v: ae.value, s: ae.selectionStart, e: ae.selectionEnd };
+    }
     try { renderInner(); } catch (e) { showFailure(e); }
+    if (keep) {
+      const n = view.querySelector(keep.sel);
+      if (n && n !== ae && view.contains(n)) {
+        if (n.value !== keep.v) { n.value = keep.v; n.dispatchEvent(new Event('input')); }
+        n.focus({ preventScroll: true });
+        try { n.setSelectionRange(keep.s, keep.e); } catch (x) { /* algunos tipos no lo admiten */ }
+      }
+    }
   };
+
+  // ---------- Teclado del móvil ----------
+  // Con el teclado abierto: las hojas se colocan encima de él (no detrás), la barra de abajo se esconde
+  // y el campo en el que escribes se lleva a la vista, con los resultados de búsqueda justo debajo.
+  const root = document.documentElement, vv = window.visualViewport;
+  function syncViewport() {
+    if (!vv) return;
+    const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    root.style.setProperty('--kb', kb + 'px');
+    root.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+    const hdr = document.querySelector('header'), sub = document.getElementById('subtabs');
+    root.style.setProperty('--hdr', ((hdr ? hdr.offsetHeight : 60) + (sub && !sub.hidden ? sub.offsetHeight : 0) + 8) + 'px');
+  }
+  if (vv) { vv.addEventListener('resize', () => { syncViewport(); revealFocused(); }); vv.addEventListener('scroll', syncViewport); }
+  syncViewport();
+  const isTextField = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit|file|color)$/.test(el.type)));
+  function revealFocused() {
+    const el = document.activeElement;
+    if (!isTextField(el)) return;
+    const visible = vv ? vv.height : window.innerHeight;
+    const r = el.getBoundingClientRect();
+    if (el.closest('.sheet')) {
+      // Dentro de una hoja: que el campo (y lo que tiene debajo) quede a la vista.
+      if (el.classList.contains('search')) return; // los buscadores de hoja ya van fijos arriba
+      if (r.bottom > visible - 12 || r.top < 0) el.scrollIntoView({ block: 'center' });
+    } else if (el.classList.contains('search')) {
+      // Buscadores de pantalla: el campo arriba, para ver los resultados debajo.
+      el.scrollIntoView({ block: 'start' });
+    } else if (r.bottom > visible - 12) el.scrollIntoView({ block: 'center' });
+  }
+  document.addEventListener('focusin', ev => {
+    if (!isTextField(ev.target)) return;
+    document.body.classList.add('typing');
+    syncViewport();
+    setTimeout(revealFocused, 350); // tras abrirse el teclado
+  });
+  document.addEventListener('focusout', () => {
+    setTimeout(() => { if (!isTextField(document.activeElement)) document.body.classList.remove('typing'); }, 120);
+  });
   function showFailure(e) {
     console.error(e);
     document.body.classList.remove('noapp');

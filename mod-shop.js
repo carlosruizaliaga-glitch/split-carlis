@@ -63,7 +63,7 @@
       ${items.length ? '<button class="ghost block small" id="tplToggle">Ocultar plantillas</button>' : ''}`}
     </div>
     ${essentialsCard()}
-    <div class="addbox"><input id="addq" placeholder="＋ Añadir producto…" autocomplete="off" value="${esc(addQuery)}"><div id="sugg" class="sugg"></div></div>`;
+    <div class="addbox"><input id="addq" class="search" type="search" enterkeyhint="done" placeholder="＋ Añadir producto…" autocomplete="off" value="${esc(addQuery)}"><div id="sugg" class="sugg"></div></div>`;
 
     if (!items.length) {
       h += `<div class="card empty">🛒 La lista está vacía.<br>Añade productos, usa una plantilla o créala desde el menú.</div>`;
@@ -140,7 +140,8 @@
         .sort((a, b) => (a.name.toLowerCase().startsWith(q) ? 0 : 1) - (b.name.toLowerCase().startsWith(q) ? 0 : 1)).slice(0, 6);
       box.innerHTML = ps.map(p => `<div class="sitem" data-sp="${p.id}">${esc(App.section(p.section).emoji)} ${esc(p.name)}</div>`).join('')
         + `<div class="sitem new" data-new>＋ Crear «${esc(inp.value.trim())}»</div>`;
-      box.querySelectorAll('[data-sp]').forEach(el => el.onclick = () => { addQuery = ''; addProduct(S.get(el.dataset.sp)); });
+      // Se vacía el campo antes de añadir: el teclado sigue abierto para el siguiente producto.
+      box.querySelectorAll('[data-sp]').forEach(el => el.onclick = () => { addQuery = ''; inp.value = ''; box.innerHTML = ''; addProduct(S.get(el.dataset.sp)); });
       box.querySelector('[data-new]').onclick = () => { const name = inp.value.trim(); addQuery = ''; openProduct(null, { name, onSaved: p => addProduct(p) }); };
     };
     inp.oninput = draw;
@@ -522,16 +523,17 @@
   }
 
   // ---------- Precios ----------
-  function renderPrices() {
+  function renderPrices(partial) {
     const view = App.view, habitual = App.habitualStore(), stores = App.compareStores();
     const ql = priceQuery.trim().toLowerCase();
     const ps = App.products().filter(p => (!ql || p.name.toLowerCase().includes(ql)) && (!priceSection || p.section === priceSection))
       .sort((a, b) => App.section(a.section).order - App.section(b.section).order || a.name.localeCompare(b.name, 'es'));
     const realCount = App.products().reduce((a, p) => a + Object.keys(p.prices || {}).length, 0);
-    let h = `<input id="pq" placeholder="🔍 Buscar producto" value="${esc(priceQuery)}">
+    let h = `<input id="pq" class="search" type="search" autocomplete="off" placeholder="🔍 Buscar producto" value="${esc(priceQuery)}">
       <div class="chips scroll-x" style="margin-top:8px"><button data-sec="" class="${!priceSection ? 'on' : ''}">Todo</button>
       ${C.SECTIONS.map(s => `<button data-sec="${s.id}" class="${priceSection === s.id ? 'on' : ''}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
       <div class="note">💡 ${realCount} precio${realCount === 1 ? '' : 's'} real${realCount === 1 ? '' : 'es'} apuntado${realCount === 1 ? '' : 's'}. Los marcados <span class="badge est">est.</span> son orientativos: toca un producto para poner el precio de la etiqueta.</div>`;
+    const head = h; h = '';
     let lastSec = null;
     ps.forEach(p => {
       const sec = App.section(p.section);
@@ -545,13 +547,14 @@
     });
     if (lastSec !== null) h += `</div>`;
     if (!ps.length) h += `<div class="card empty">Sin productos.</div>`;
-    view.innerHTML = h;
-    const pq = view.querySelector('#pq');
-    pq.oninput = () => {
-      priceQuery = pq.value; clearTimeout(pq._t);
-      pq._t = setTimeout(() => { App.render(); const n = App.view.querySelector('#pq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300);
-    };
-    view.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => { priceSection = b.dataset.sec; App.render(); });
+    const body = view.querySelector('#pbody');
+    if (partial) { if (!body) return; body.innerHTML = h; }
+    else {
+      view.innerHTML = head + `<div id="pbody">${h}</div>`;
+      const pq = view.querySelector('#pq');
+      pq.oninput = () => { priceQuery = pq.value; clearTimeout(pq._t); pq._t = setTimeout(() => renderPrices(true), 120); };
+      view.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => { priceSection = b.dataset.sec; App.render(); });
+    }
     view.querySelectorAll('[data-p]').forEach(el => el.onclick = () => openProduct(S.get(el.dataset.p)));
   }
 
@@ -657,7 +660,7 @@
   // Selector de producto reutilizable (lista y recetas).
   App.pickProduct = function (cb) {
     let q = '';
-    const m = App.sheet(`<h3>Elegir producto</h3><input id="q" placeholder="🔍 Buscar o escribir uno nuevo" autocomplete="off">
+    const m = App.sheet(`<div class="sheethead"><h3>Elegir producto</h3><input id="q" class="search" type="search" enterkeyhint="done" placeholder="🔍 Buscar o escribir uno nuevo" autocomplete="off"></div>
       <div class="list tight" id="res" style="margin-top:8px"></div><div class="actions"><button id="cancel">Cerrar</button></div>`, { stack: true });
     const $ = s => m.querySelector(s);
     const draw = () => {

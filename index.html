@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#f7f3ee" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151311" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -239,12 +239,22 @@
     .nutin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .nutin label { margin: 0 0 4px; }
     .kcal-pill { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+    /* Teclado del móvil: hojas encima del teclado, buscador fijo arriba y resultados visibles */
+    .overlay { top: auto; bottom: var(--kb, 0px); height: var(--vvh, 100dvh); }
+    .sheet { max-height: calc(var(--vvh, 100dvh) - 16px); overscroll-behavior: contain; }
+    .sheethead { position: sticky; top: -8px; z-index: 2; background: var(--card); margin: -8px 0 0; padding: 8px 0 8px; }
+    body.typing nav.tabs, body.typing .fab, body.typing .selbar { display: none; }
+    body.typing { padding-bottom: 75vh; }
+    main input, main textarea, main select { scroll-margin-top: var(--hdr, 120px); }
+    .sugg { max-height: calc(var(--vvh, 70vh) - var(--hdr, 120px) - 64px); overflow-y: auto; overscroll-behavior: contain; }
+    input[type=search] { -webkit-appearance: none; appearance: none; }
+    .sugg .sitem.new { position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--line); }
   </style>
-  <script src="look.js?v=10"></script>
+  <script src="look.js?v=11"></script>
 </head>
 <body class="noapp">
   <header>
-    <img src="cats-wide.jpg?v=10" alt="Monchi y Hierba" class="cats">
+    <img src="cats-wide.jpg?v=11" alt="Monchi y Hierba" class="cats">
     <div><h1 id="title">Split Carlis</h1><div class="sub" id="subtitle"></div></div>
     <button id="syncBtn" aria-label="Sincronizar"><span class="dot" id="syncDot"></span><span id="syncTxt"></span></button>
   </header>
@@ -252,17 +262,17 @@
   <main id="view"></main>
   <button class="fab" id="fab" aria-label="Añadir" hidden>+</button>
   <nav class="tabs" id="nav"></nav>
-  <script src="logic.js?v=10"></script>
-  <script src="shoplogic.js?v=10"></script>
-  <script src="store.js?v=10"></script>
-  <script src="defaults.js?v=10"></script>
-  <script src="catalog.js?v=10"></script>
-  <script src="core.js?v=10"></script>
-  <script src="mod-home.js?v=10"></script>
-  <script src="mod-split.js?v=10"></script>
-  <script src="mod-menu.js?v=10"></script>
-  <script src="mod-shop.js?v=10"></script>
-  <script src="mod-settings.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="logic.js?v=11"></script>
+  <script src="shoplogic.js?v=11"></script>
+  <script src="store.js?v=11"></script>
+  <script src="defaults.js?v=11"></script>
+  <script src="catalog.js?v=11"></script>
+  <script src="core.js?v=11"></script>
+  <script src="mod-home.js?v=11"></script>
+  <script src="mod-split.js?v=11"></script>
+  <script src="mod-menu.js?v=11"></script>
+  <script src="mod-shop.js?v=11"></script>
+  <script src="mod-settings.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
