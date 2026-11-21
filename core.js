@@ -96,7 +96,15 @@
         <div class="actions">${opts.cancel ? `<button data-no>${esc(opts.cancel)}</button>` : ''}
         <button data-yes class="${opts.danger ? 'danger-solid' : 'primary'}">${esc(opts.ok)}</button></div></div>`;
       document.body.appendChild(root);
-      const done = v => { root.remove(); resolve(v); };
+      // Es una entrada del historial: el gesto atrás lo cierra como «Cancelar».
+      const done = (v, fromPop) => {
+        if (!root.isConnected) return;
+        root.remove(); openDialog = null;
+        if (!fromPop) navBack();
+        resolve(v);
+      };
+      openDialog = { cancel: () => done(false, true) };
+      navPush(navState());
       root.querySelector('[data-yes]').onclick = () => done(true);
       const no = root.querySelector('[data-no]');
       if (no) no.onclick = () => done(false);
@@ -108,6 +116,7 @@
 
   // Hojas apilables (p. ej. elegir producto encima del formulario de receta).
   const sheets = [];
+  // Cada hoja abierta es una entrada del historial, así el gesto atrás la cierra.
   App.sheet = function (html, opts) {
     opts = opts || {};
     if (!opts.stack) App.closeAllSheets();
@@ -119,14 +128,19 @@
     document.body.appendChild(ov);
     document.body.style.overflow = 'hidden';
     sheets.push(ov);
+    navPush(navState());
     return ov.querySelector('.sheet');
   };
-  App.closeSheet = function () {
+  function closeTop(fromPop) {
     const ov = sheets.pop();
-    if (ov) ov.remove();
+    if (!ov) return;
+    ov.remove();
     if (!sheets.length) document.body.style.overflow = '';
-  };
-  App.closeAllSheets = function () { while (sheets.length) App.closeSheet(); };
+    if (!fromPop) navBack();
+  }
+  // Ojo: se usa directamente como onclick, así que no admite parámetros.
+  App.closeSheet = function () { closeTop(false); };
+  App.closeAllSheets = function () { while (sheets.length) closeTop(false); };
 
   // Elimina un dato con opción de deshacer.
   App.removeWithUndo = function (kind, data, msg) {
@@ -136,25 +150,76 @@
 
   // ---------- Navegación ----------
   const MODS = [
+    { id: 'home', icon: '🏠', name: 'Inicio', title: 'Inicio', subs: [] },
     { id: 'split', icon: '💶', name: 'Gastos', title: 'Gastos', subs: [['balance', 'Saldo'], ['moves', 'Movimientos'], ['stats', 'Resumen']] },
     { id: 'menu', icon: '📅', name: 'Menú', title: 'Menú semanal', subs: [] },
     { id: 'recipes', icon: '🍳', name: 'Recetas', title: 'Recetas', subs: [] },
     { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['compare', 'Comparar'], ['prices', 'Precios'], ['savings', 'Ahorro']] },
     { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [] }
   ];
+  // La app siempre se abre en Inicio; de cada módulo se recuerda la última pestaña.
   const nav = (() => { try { return JSON.parse(localStorage.getItem('splitcarlis.nav')) || {}; } catch (e) { return {}; } })();
-  App.nav = { mod: nav.mod || 'split', sub: Object.assign({ split: 'balance', menu: 'week', shop: 'list' }, nav.sub || {}) };
+  App.nav = { mod: 'home', sub: Object.assign({ split: 'balance', shop: 'list' }, nav.sub || {}, { settings: 'hub' }) };
   const saveNav = () => { try { localStorage.setItem('splitcarlis.nav', JSON.stringify(App.nav)); } catch (e) {} };
+
+  // ---------- Atrás (gesto o botón del móvil) ----------
+  // Cada pantalla, pestaña, hoja y diálogo es una entrada del historial. Atrás cierra lo que esté
+  // abierto o vuelve a la pantalla anterior, hasta Inicio; desde Inicio sale de la app.
+  // Los «atrás» que hace la propia app (al cerrar con un botón) se agrupan en un history.go(-n)
+  // y las entradas nuevas esperan a que termine, porque el navegador los procesa de forma asíncrona.
+  let openDialog = null;
+  let backN = 0, awaitingPop = false, flushT = null;
+  const pendingPush = [];
+  function navState() {
+    return { sc: 1, mod: App.nav.mod, sub: App.nav.sub[App.nav.mod] || null, sheets: sheets.length, dialog: !!openDialog };
+  }
+  function navPush(st) { if (backN || awaitingPop || flushT) { pendingPush.push(st); scheduleNav(); } else history.pushState(st, ''); }
+  function navBack() { if (pendingPush.length) { pendingPush.pop(); return; } backN++; scheduleNav(); }
+  function scheduleNav() { if (!flushT && !awaitingPop) flushT = setTimeout(flushNav, 0); }
+  function flushNav() {
+    flushT = null;
+    if (awaitingPop) return;
+    if (backN) { const n = backN; backN = 0; awaitingPop = true; history.go(-n); return; }
+    while (pendingPush.length) history.pushState(pendingPush.shift(), '');
+  }
+  // Guarda el scroll de la pantalla actual en su entrada, para recuperarlo al volver.
+  function rememberScroll() {
+    if (backN || awaitingPop || flushT || pendingPush.length) return;
+    try { history.replaceState(Object.assign({}, history.state, { y: window.scrollY }), ''); } catch (e) {}
+  }
   App.go = function (mod, sub) {
+    const same = App.nav.mod === mod && (!sub || App.nav.sub[mod] === sub);
+    if (same) { App.render(); window.scrollTo(0, 0); return; }
+    rememberScroll();
     App.nav.mod = mod;
     if (sub) App.nav.sub[mod] = sub;
-    saveNav(); App.render(); window.scrollTo(0, 0);
+    saveNav();
+    navPush(navState());
+    App.render(); window.scrollTo(0, 0);
   };
+  history.replaceState({ sc: 1, mod: 'home', sub: null, sheets: 0, guard: true }, '');
+  window.addEventListener('popstate', ev => {
+    const st = ev.state || {};
+    if (awaitingPop) { awaitingPop = false; flushNav(); return; }
+    // Atrás del usuario: primero se cierra el diálogo o las hojas que hubiera.
+    if (openDialog && !st.dialog) { openDialog.cancel(); return; }
+    const keep = st.sheets || 0;
+    if (sheets.length > keep) { while (sheets.length > keep) closeTop(true); }
+    if (!st.sc) return;
+    const mod = st.mod || 'home';
+    const changed = mod !== App.nav.mod || (st.sub && st.sub !== App.nav.sub[mod]);
+    if (changed) {
+      App.nav.mod = mod;
+      if (st.sub) App.nav.sub[mod] = st.sub;
+      saveNav(); App.render();
+      window.scrollTo(0, st.y || 0);
+    }
+  });
 
   const view = App.view = document.getElementById('view');
   const navEl = document.getElementById('nav');
   navEl.innerHTML = MODS.map(m => `<button data-mod="${m.id}"><span class="ic">${m.icon}</span>${m.name}</button>`).join('');
-  navEl.querySelectorAll('[data-mod]').forEach(b => b.addEventListener('click', () => App.go(b.dataset.mod)));
+  navEl.querySelectorAll('[data-mod]').forEach(b => b.addEventListener('click', () => App.go(b.dataset.mod, b.dataset.mod === 'settings' ? 'hub' : null)));
   document.getElementById('syncBtn').addEventListener('click', () => { S.syncNow(); App.toast('Sincronizando…'); });
   const fab = document.getElementById('fab');
   fab.addEventListener('click', () => { if (App.fabAction) App.fabAction(); });

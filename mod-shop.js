@@ -692,5 +692,5 @@
     };
   }
 
-  App.modules.shop = { render, openProduct, addProduct };
+  App.modules.shop = { render, openProduct, addProduct, essentialsStatus, newEssentialItem, itemCost };
 })();

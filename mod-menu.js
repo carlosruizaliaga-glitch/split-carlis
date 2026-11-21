@@ -487,9 +487,10 @@
 
   // Ficha de una receta: ingredientes para N personas, coste y accesos directos
   // al menú de la semana y a la lista de la compra.
-  function openRecipeCard(r) {
+  // slotRef = [fecha, comida] cuando se abre desde un hueco del menú (permite cambiarla).
+  function openRecipeCard(r, startServings, slotRef) {
     if (!r) return;
-    let servings = App.defaultServings();
+    let servings = startServings || App.defaultServings();
     const store = App.habitualStore();
     const m = App.sheet(`<div class="row"><div class="emoji" style="font-size:34px">${esc(r.emoji)}</div>
         <div class="grow"><h3 style="margin:0">${esc(r.name)}</h3><div class="muted">${(r.meals || []).map(x => App.mealDef(x).emoji + ' ' + App.mealDef(x).name).join(' · ')}</div></div></div>
@@ -499,7 +500,7 @@
       <div class="muted" id="cost" style="margin-top:8px"></div>
       ${r.notes ? `<div class="section-label">Notas</div><div class="note" style="white-space:pre-wrap">${esc(r.notes)}</div>` : ''}
       <div class="btnrow" style="margin-top:14px"><button class="primary" id="toMenu">📅 Al menú</button><button class="primary" id="toList">🛒 A la lista</button></div>
-      <div class="actions"><button id="edit">✏️ Editar</button><button id="cancel">Cerrar</button></div>`);
+      <div class="actions">${slotRef ? '<button id="swap">🔁 Cambiar</button>' : ''}<button id="edit">✏️ Editar</button><button id="cancel">Cerrar</button></div>`);
     const $ = s => m.querySelector(s);
     function draw() {
       const pById = App.productsById();
@@ -518,10 +519,11 @@
     $('#toMenu').onclick = () => openAddToMenu(r, servings);
     $('#toList').onclick = () => openNeedsToList({ title: `🛒 ${r.name} a la lista`, stack: true, getMeals: () => [{ recipe: r.id, servings }] });
     $('#edit').onclick = () => openRecipe(S.get(r.id) || r);
+    if (slotRef) $('#swap').onclick = () => openSlot(slotRef[0], slotRef[1]);
     $('#cancel').onclick = App.closeSheet;
     draw();
   }
 
-  App.modules.menu = { render, openRecipe };
+  App.modules.menu = { render, openRecipe, openSlot, openNeedsToList, openRecipeCard, recipeCost, mealId };
   App.modules.recipes = { render: renderRecipesModule, openRecipe, startPicking };
 })();

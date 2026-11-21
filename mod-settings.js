@@ -1,4 +1,4 @@
-// Módulo Ajustes: personas, grupos, categorías, monedas, súpers, menú, sincronización y copias.
+// Módulo Ajustes: lista de apartados con su subpágina (como en Betting), incluida la apariencia.
 (function () {
   'use strict';
   const App = window.App, S = App.S, L = App.L, C = App.C;
@@ -6,97 +6,192 @@
   const COLORS = ['#3b5bdb', '#c2255c', '#d9822b', '#2e8b57', '#1f7a8c', '#7048e8', '#c9a227', '#e03131', '#5c5f66', '#8d6e63'];
   const putSettings = patch => S.put('settings', Object.assign({}, S.get('settings') || App.D.settings, patch));
 
-  function render() {
-    const view = App.view, ps = App.people(), me = S.me(), st = App.settings();
-    const last = S.lastSync() ? new Date(S.lastSync()).toLocaleString('es-ES') : 'nunca';
-    const r = App.rates();
+  const TITLES = { people: 'Personas', groups: 'Grupos y categorías', money: 'Monedas', stores: 'Supermercados', menu: 'Menú y raciones',
+    look: 'Apariencia', sync: 'Sincronización', data: 'Copia de seguridad' };
+  const THEME_NAMES = { auto: 'Automático', light: 'Claro', dark: 'Oscuro' };
+  const SIZE_NAMES = { s: 'Pequeña', m: 'Normal', l: 'Grande' };
+
+  function render(sub) {
+    sub = TITLES[sub] ? sub : 'hub';
+    const view = App.view;
+    view.innerHTML = sub === 'hub' ? hubHtml() : `<div class="subhead"><button class="icon" id="sback" aria-label="Volver a Ajustes">‹</button><b>${TITLES[sub]}</b></div>` + PAGES[sub].html();
+    const $ = s => view.querySelector(s);
+    const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
+    on('#sback', () => history.back());
+    view.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => App.go('settings', b.dataset.sub));
+    view.querySelectorAll('[data-me]').forEach(b => b.onclick = () => { S.setMe(b.dataset.me); App.render(); });
+    if (sub !== 'hub') PAGES[sub].bind(view, $, on);
+  }
+
+  function hubHtml() {
+    const ps = App.people(), me = S.me(), look = window.Look.get();
     const habitual = App.habitualStore();
-    const enabledMeals = st.meals || C.MEALS.map(m => m.id);
-    let h = `<h2>En este móvil eres</h2><div class="seg">${ps.map(p => `<button data-me="${p.id}" class="${p.id === me ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div>
+    const acc = window.Look.ACCENTS.find(a => a[0] === look.accent) || window.Look.ACCENTS[0];
+    const stt = S.status(), pend = S.pending();
+    const syncTxt = pend ? `${pend} cambios sin subir` : stt === 'offline' ? 'Sin conexión' : stt === 'error' ? 'Error al sincronizar' : 'Al día';
+    const item = (key, ic, title, subtitle) => `<button class="mrow" data-sub="${key}"><span class="mic">${ic}</span><span class="grow"><b>${title}</b><em>${subtitle}</em></span><span class="chev">›</span></button>`;
+    return `<h2>En este móvil eres</h2><div class="seg">${ps.map(p => `<button data-me="${p.id}" class="${p.id === me ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div>
+      <h2>Gastos</h2><div class="mlist">
+        ${item('people', '👥', 'Personas', ps.map(p => esc(p.name)).join(' y '))}
+        ${item('groups', '🗂️', 'Grupos y categorías', `${App.groups().length} grupos · ${App.categories().length} categorías`)}
+        ${item('money', '💱', 'Monedas', `${Object.keys(App.rates()).length} monedas con su cambio a euros`)}
+      </div>
+      <h2>Comida y compra</h2><div class="mlist">
+        ${item('stores', '🛒', 'Supermercados', `${App.stores().length} súpers${habitual ? ' · habitual ' + esc(habitual.name) : ''}`)}
+        ${item('menu', '🍽️', 'Menú y raciones', `${App.enabledMeals().length} comidas al día · ${App.defaultServings()} personas`)}
+      </div>
+      <h2>La app</h2><div class="mlist">
+        ${item('look', '🎨', 'Apariencia', `${THEME_NAMES[look.theme] || 'Automático'} · ${esc(acc[1])} · letra ${(SIZE_NAMES[look.size] || 'Normal').toLowerCase()}`)}
+        ${item('sync', '🔄', 'Sincronización', `${syncTxt} · actualizar la app y sesión`)}
+        ${item('data', '💾', 'Copia de seguridad', 'Exportar, Excel e importar')}
+      </div>
+      <div class="muted center" style="margin-top:18px">Split Carlis · con la supervisión de Monchi y Hierba 🐱🐈‍⬛</div>`;
+  }
 
-      <h2>🛒 Supermercados</h2><div class="card list tight">${App.stores().map(s => `<div class="item tap" data-store="${s.id}">${App.storeDot(s)}<div class="grow">${esc(s.name)}
-        ${habitual && s.id === habitual.id ? '<span class="pill pos">habitual</span>' : ''}${s.compare === false ? ' <span class="pill zero">no compara</span>' : ''}</div>›</div>`).join('')}</div>
-      <button class="block small ghost" id="addStore">＋ Añadir súper</button>
-      <div class="card"><label style="margin-top:0">Recomendar ir a dos súpers si se ahorra al menos (€)</label>
-        <input id="thr" type="text" inputmode="decimal" autocomplete="off" value="${st.pairThreshold || 3}"></div>
-
-      <h2>🍽️ Menú</h2><div class="card"><label style="margin-top:0">Comidas que planificáis</label>
-        <div class="chips">${C.MEALS.map(m => `<button data-meal="${m.id}" class="${enabledMeals.includes(m.id) ? 'on' : ''}">${m.emoji} ${m.name}</button>`).join('')}</div>
-        <label>Raciones por defecto</label>
-        <div class="row"><button class="qbtn" id="servMinus">−</button><b class="qval">${App.defaultServings()}</b><button class="qbtn" id="servPlus">+</button></div></div>
-
-      <h2>👥 Personas</h2><div class="card list">${ps.map(p => `<div class="item tap" data-person="${p.id}">${App.avatar(p)}<div class="grow"><b>${esc(p.name)}</b></div>›</div>`).join('')}</div>
-      <button class="block small ghost" id="addPerson">＋ Añadir persona</button>
-      <h2>🗂️ Grupos de gastos</h2><div class="card list">${App.groups().map(g => `<div class="item tap" data-group="${g.id}"><div class="emoji">${esc(g.emoji)}</div><div class="grow">${esc(g.name)}${g.archived ? ' <span class="muted">(archivado)</span>' : ''}</div>›</div>`).join('')}</div>
-      <button class="block small ghost" id="addGroup">＋ Añadir grupo (p. ej. un viaje)</button>
-      <h2>🏷️ Categorías de gastos</h2><div class="card list">${App.categories().map(c => `<div class="item tap" data-cat="${c.id}"><div class="emoji">${esc(c.emoji)}</div><div class="grow">${esc(c.name)}<div class="muted">${c.group ? esc(App.group(c.group).name) : 'Todos los grupos'}</div></div>›</div>`).join('')}</div>
-      <button class="block small ghost" id="addCat">＋ Añadir categoría</button>
-      <h2>💱 Monedas (unidades por 1 €)</h2><div class="card">
-        <div class="rates">${Object.keys(r).sort().map(c => `<label class="row"><span style="width:44px">${c}</span><input data-rate="${c}" type="text" inputmode="decimal" autocomplete="off" value="${r[c]}"></label>`).join('')}</div>
-        <div class="row" style="margin-top:10px"><input id="newCur" placeholder="Otra (código, p. ej. AUD)" maxlength="3" style="text-transform:uppercase"><button class="small" id="addCur">Añadir</button></div>
-        <button class="primary block" id="saveRates" style="margin-top:10px">Guardar tipos de cambio</button></div>
-      <h2>🔄 Sincronización</h2><div class="card">
-        <div>Última sincronización: <b>${esc(last)}</b></div>
-        <div class="muted">Cambios pendientes de subir: ${S.pending()}</div>
-        <button class="block" id="syncNow" style="margin-top:10px">🔄 Sincronizar ahora</button>
-        <button class="block" id="hardReload" style="margin-top:8px">⬇️ Forzar actualización de la app</button>
-        <button class="block danger" id="logout" style="margin-top:8px">Cerrar sesión en este móvil</button></div>
-      <h2>💾 Copia de seguridad</h2><div class="card">
-        <div class="muted">Los datos están en la nube y en cada móvil. Aun así, puedes guardar una copia.</div>
+  const PAGES = {
+    look: {
+      html() {
+        const l = window.Look.get();
+        return `<h2>Tema</h2><div class="card"><div class="seg">${Object.entries(THEME_NAMES).map(([k, t]) => `<button data-theme="${k}" class="${l.theme === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+          <div class="muted" style="margin-top:8px">Automático sigue el modo claro u oscuro del móvil.</div></div>
+          <h2>Color principal</h2><div class="card"><div class="palg">${window.Look.ACCENTS.map(([k, n, lc, dc]) => `<button data-accent="${k}" class="${l.accent === k ? 'on' : ''}"><span class="sw split" style="--l:${lc};--d:${dc}"></span>${esc(n)}</button>`).join('')}</div>
+          <div class="muted" style="margin-top:8px">Cada color tiene su versión para el modo claro y el oscuro.</div></div>
+          <h2>Fondo</h2><div class="card"><div class="palg">${window.Look.BASES.map(([k, n, lc, dc]) => `<button data-base="${k}" class="${l.base === k ? 'on' : ''}"><span class="sw split" style="--l:${lc[0]};--d:${dc[0]}"></span>${esc(n)}</button>`).join('')}</div>
+          <div class="muted" style="margin-top:8px">«Negro» es negro puro en modo oscuro (gasta menos batería en pantallas OLED).</div></div>
+          <h2>Tamaño de letra</h2><div class="card"><div class="seg">${Object.entries(SIZE_NAMES).map(([k, t]) => `<button data-size="${k}" class="${l.size === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+          <h2>Vista previa</h2><div class="preview"><div class="card" style="margin:0"><div class="row"><div class="emoji">🍲</div><div class="grow"><b>Alubias con verduras</b><div class="muted">Comida · 2 personas</div></div><span class="pill pos">en paz</span></div>
+            <div class="bar"><span style="width:60%"></span></div><div class="btnrow"><button class="primary">📅 Al menú</button><button>🛒 A la lista</button></div></div></div>
+          <button class="ghost block small" id="lookReset" style="margin-top:12px">Volver a la apariencia original</button>
+          <div class="muted center" style="margin-top:8px">La apariencia se guarda en este móvil: Amparo puede elegir la suya.</div>`;
+      },
+      bind(view, $, on) {
+        const set = patch => { window.Look.set(patch); App.render(); };
+        view.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => set({ theme: b.dataset.theme }));
+        view.querySelectorAll('[data-accent]').forEach(b => b.onclick = () => set({ accent: b.dataset.accent }));
+        view.querySelectorAll('[data-base]').forEach(b => b.onclick = () => set({ base: b.dataset.base }));
+        view.querySelectorAll('[data-size]').forEach(b => b.onclick = () => set({ size: b.dataset.size }));
+        on('#lookReset', () => set({ theme: 'auto', accent: 'naranja', base: 'calido', size: 'm' }));
+      }
+    },
+    people: {
+      html: () => `<div class="card list">${App.people().map(p => `<div class="item tap" data-person="${p.id}">${App.avatar(p)}<div class="grow"><b>${esc(p.name)}</b>${p.id === S.me() ? '<div class="muted">En este móvil</div>' : ''}</div>›</div>`).join('')}</div>
+        <button class="block small ghost" id="addPerson">＋ Añadir persona</button>`,
+      bind(view, $, on) {
+        view.querySelectorAll('[data-person]').forEach(el => el.onclick = () => openPersonForm(S.get(el.dataset.person)));
+        on('#addPerson', () => openPersonForm());
+      }
+    },
+    groups: {
+      html: () => `<h2>Grupos de gastos</h2><div class="card list">${App.groups().map(g => `<div class="item tap" data-group="${g.id}"><div class="emoji">${esc(g.emoji)}</div><div class="grow">${esc(g.name)}${g.archived ? ' <span class="muted">(archivado)</span>' : ''}</div>›</div>`).join('')}</div>
+        <button class="block small ghost" id="addGroup">＋ Añadir grupo (p. ej. un viaje)</button>
+        <h2>Categorías</h2><div class="card list">${App.categories().map(c => `<div class="item tap" data-cat="${c.id}"><div class="emoji">${esc(c.emoji)}</div><div class="grow">${esc(c.name)}<div class="muted">${c.group ? esc(App.group(c.group).name) : 'Todos los grupos'}</div></div>›</div>`).join('')}</div>
+        <button class="block small ghost" id="addCat">＋ Añadir categoría</button>`,
+      bind(view, $, on) {
+        view.querySelectorAll('[data-group]').forEach(el => el.onclick = () => openGroupForm(S.get(el.dataset.group)));
+        on('#addGroup', () => openGroupForm());
+        view.querySelectorAll('[data-cat]').forEach(el => el.onclick = () => openCategoryForm(S.get(el.dataset.cat)));
+        on('#addCat', () => openCategoryForm());
+      }
+    },
+    money: {
+      html() {
+        const r = App.rates();
+        return `<div class="card"><div class="muted" style="margin-bottom:10px">Unidades de cada moneda por 1 €. Se usan para pasar a euros los gastos de los viajes.</div>
+          <div class="rates">${Object.keys(r).sort().map(c => `<label class="row"><span style="width:44px">${c}</span><input data-rate="${c}" type="text" inputmode="decimal" autocomplete="off" value="${r[c]}"></label>`).join('')}</div>
+          <div class="row" style="margin-top:10px"><input id="newCur" placeholder="Otra (código, p. ej. AUD)" maxlength="3" style="text-transform:uppercase"><button class="small" id="addCur">Añadir</button></div>
+          <button class="primary block" id="saveRates" style="margin-top:10px">Guardar tipos de cambio</button></div>`;
+      },
+      bind(view, $, on) {
+        on('#addCur', () => {
+          const c = $('#newCur').value.trim().toUpperCase();
+          if (!/^[A-Z]{3}$/.test(c)) { App.toast('Escribe un código de 3 letras'); return; }
+          try { new Intl.NumberFormat('es-ES', { style: 'currency', currency: c }); } catch (e) { App.toast('Moneda no reconocida'); return; }
+          putSettings({ rates: Object.assign({}, App.rates(), { [c]: App.rates()[c] || 1 }) });
+          App.toast('Añadida ' + c + '. Ajusta su tipo de cambio.');
+        });
+        on('#saveRates', () => {
+          const nr = {};
+          for (const inp of view.querySelectorAll('[data-rate]')) {
+            const v = App.num(inp.value);
+            if (!(v > 0)) { App.toast('Tipo no válido en ' + inp.dataset.rate); return; }
+            nr[inp.dataset.rate] = v;
+          }
+          putSettings({ rates: nr }); App.toast('Tipos de cambio guardados');
+        });
+      }
+    },
+    stores: {
+      html() {
+        const habitual = App.habitualStore(), st = App.settings();
+        return `<div class="card list tight">${App.stores().map(s => `<div class="item tap" data-store="${s.id}">${App.storeDot(s)}<div class="grow">${esc(s.name)}
+            ${habitual && s.id === habitual.id ? '<span class="pill pos">habitual</span>' : ''}${s.compare === false ? ' <span class="pill zero">no compara</span>' : ''}</div>›</div>`).join('')}</div>
+          <button class="block small ghost" id="addStore">＋ Añadir súper</button>
+          <div class="card"><label style="margin-top:0">Recomendar ir a dos súpers si se ahorra al menos (€)</label>
+            <input id="thr" type="text" inputmode="decimal" autocomplete="off" value="${st.pairThreshold || 3}"></div>`;
+      },
+      bind(view, $, on) {
+        view.querySelectorAll('[data-store]').forEach(el => el.onclick = () => openStoreForm(S.get(el.dataset.store)));
+        on('#addStore', () => openStoreForm());
+        $('#thr').onchange = () => { const v = App.num($('#thr').value); if (v >= 0) { putSettings({ pairThreshold: v }); App.toast('Guardado'); } else App.toast('Número no válido'); };
+      }
+    },
+    menu: {
+      html() {
+        const enabledMeals = App.settings().meals || C.MEALS.map(m => m.id);
+        return `<div class="card"><label style="margin-top:0">Comidas que planificáis</label>
+          <div class="chips">${C.MEALS.map(m => `<button data-meal="${m.id}" class="${enabledMeals.includes(m.id) ? 'on' : ''}">${m.emoji} ${m.name}</button>`).join('')}</div>
+          <label>Personas que comen por defecto</label>
+          <div class="row"><button class="qbtn" id="servMinus">−</button><b class="qval">${App.defaultServings()}</b><button class="qbtn" id="servPlus">+</button></div>
+          <div class="muted" style="margin-top:8px">Se usa al poner comidas en el menú y al pasar recetas a la lista. Se puede cambiar en cada comida.</div></div>`;
+      },
+      bind(view, $, on) {
+        const enabledMeals = App.settings().meals || C.MEALS.map(m => m.id);
+        view.querySelectorAll('[data-meal]').forEach(b => b.onclick = () => {
+          const id = b.dataset.meal;
+          const next = enabledMeals.includes(id) ? enabledMeals.filter(x => x !== id) : C.MEALS.map(m => m.id).filter(x => enabledMeals.includes(x) || x === id);
+          if (!next.length) { App.toast('Deja al menos una comida'); return; }
+          putSettings({ meals: next });
+        });
+        on('#servMinus', () => putSettings({ servings: Math.max(1, App.defaultServings() - 1) }));
+        on('#servPlus', () => putSettings({ servings: Math.min(12, App.defaultServings() + 1) }));
+      }
+    },
+    sync: {
+      html() {
+        const last = S.lastSync() ? new Date(S.lastSync()).toLocaleString('es-ES') : 'nunca';
+        return `<div class="card"><div>Última sincronización: <b>${esc(last)}</b></div>
+          <div class="muted">Cambios pendientes de subir: ${S.pending()}</div>
+          <button class="block" id="syncNow" style="margin-top:10px">🔄 Sincronizar ahora</button></div>
+          <h2>Actualizar</h2><div class="card"><div class="muted">Si algo no responde o no ves lo último, fuerza la actualización. No se borra ningún dato.</div>
+          <button class="block" id="hardReload" style="margin-top:10px">⬇️ Forzar actualización de la app</button></div>
+          <h2>Sesión</h2><div class="card"><div class="muted">Para entrar otra vez necesitarás el código de casa.</div>
+          <button class="block danger" id="logout" style="margin-top:10px">Cerrar sesión en este móvil</button></div>`;
+      },
+      bind(view, $, on) {
+        on('#syncNow', () => { S.syncNow(); App.toast('Sincronizando…'); });
+        on('#hardReload', App.hardReload);
+        on('#logout', async () => {
+          const pend = S.pending();
+          const msg = pend ? `Hay ${pend} cambio(s) sin subir a la nube que se perderán.\n¿Cerrar sesión igualmente?` : '¿Cerrar sesión en este móvil? Los datos siguen en la nube; para volver a entrar necesitarás el código.';
+          if (!await App.ask(msg, { ok: 'Cerrar sesión', danger: true })) return;
+          S.logout(); App.render();
+        });
+      }
+    },
+    data: {
+      html: () => `<div class="card"><div class="muted">Los datos están en la nube y en cada móvil. Aun así, puedes guardar una copia.</div>
         <button class="block" id="exp" style="margin-top:10px">📤 Exportar copia (JSON)</button>
         <button class="block" id="csv" style="margin-top:8px">📊 Exportar gastos a CSV (Excel)</button>
         <button class="block" id="imp" style="margin-top:8px">📥 Importar copia</button>
-        <input type="file" id="file" accept="application/json,.json" style="display:none"></div>
-      <div class="muted center" style="margin-top:18px">Split Carlis · con la supervisión de Monchi y Hierba 🐱🐈‍⬛</div>`;
-    view.innerHTML = h;
-    const $ = s => view.querySelector(s);
-    view.querySelectorAll('[data-me]').forEach(b => b.onclick = () => { S.setMe(b.dataset.me); App.render(); });
-    view.querySelectorAll('[data-store]').forEach(el => el.onclick = () => openStoreForm(S.get(el.dataset.store)));
-    $('#addStore').onclick = () => openStoreForm();
-    $('#thr').onchange = () => { const v = App.num($('#thr').value); if (v >= 0) { putSettings({ pairThreshold: v }); App.toast('Guardado'); } };
-    view.querySelectorAll('[data-meal]').forEach(b => b.onclick = () => {
-      const id = b.dataset.meal;
-      const next = enabledMeals.includes(id) ? enabledMeals.filter(x => x !== id) : C.MEALS.map(m => m.id).filter(x => enabledMeals.includes(x) || x === id);
-      if (!next.length) { App.toast('Deja al menos una comida'); return; }
-      putSettings({ meals: next });
-    });
-    $('#servMinus').onclick = () => putSettings({ servings: Math.max(1, App.defaultServings() - 1) });
-    $('#servPlus').onclick = () => putSettings({ servings: Math.min(12, App.defaultServings() + 1) });
-    view.querySelectorAll('[data-person]').forEach(el => el.onclick = () => openPersonForm(S.get(el.dataset.person)));
-    $('#addPerson').onclick = () => openPersonForm();
-    view.querySelectorAll('[data-group]').forEach(el => el.onclick = () => openGroupForm(S.get(el.dataset.group)));
-    $('#addGroup').onclick = () => openGroupForm();
-    view.querySelectorAll('[data-cat]').forEach(el => el.onclick = () => openCategoryForm(S.get(el.dataset.cat)));
-    $('#addCat').onclick = () => openCategoryForm();
-    $('#addCur').onclick = () => {
-      const c = $('#newCur').value.trim().toUpperCase();
-      if (!/^[A-Z]{3}$/.test(c)) { App.toast('Escribe un código de 3 letras'); return; }
-      try { new Intl.NumberFormat('es-ES', { style: 'currency', currency: c }); } catch (e) { App.toast('Moneda no reconocida'); return; }
-      putSettings({ rates: Object.assign({}, App.rates(), { [c]: App.rates()[c] || 1 }) });
-      App.toast('Añadida ' + c + '. Ajusta su tipo de cambio.');
-    };
-    $('#saveRates').onclick = () => {
-      const nr = {};
-      for (const inp of view.querySelectorAll('[data-rate]')) {
-        const v = App.num(inp.value);
-        if (!(v > 0)) { App.toast('Tipo no válido en ' + inp.dataset.rate); return; }
-        nr[inp.dataset.rate] = v;
+        <input type="file" id="file" accept="application/json,.json" style="display:none"></div>`,
+      bind(view, $, on) {
+        on('#exp', exportBackup);
+        on('#csv', exportCsv);
+        on('#imp', () => $('#file').click());
+        $('#file').onchange = ev => importBackup(ev.target.files[0]);
       }
-      putSettings({ rates: nr }); App.toast('Tipos de cambio guardados');
-    };
-    $('#syncNow').onclick = () => { S.syncNow(); App.toast('Sincronizando…'); };
-    $('#hardReload').onclick = App.hardReload;
-    $('#logout').onclick = async () => {
-      const pend = S.pending();
-      const msg = pend ? `Hay ${pend} cambio(s) sin subir a la nube que se perderán.\n¿Cerrar sesión igualmente?` : '¿Cerrar sesión en este móvil? Los datos siguen en la nube; para volver a entrar necesitarás el código.';
-      if (!await App.ask(msg, { ok: 'Cerrar sesión', danger: true })) return;
-      S.logout(); App.render();
-    };
-    $('#exp').onclick = exportBackup;
-    $('#csv').onclick = exportCsv;
-    $('#imp').onclick = () => $('#file').click();
-    $('#file').onchange = ev => importBackup(ev.target.files[0]);
-  }
+    }
+  };
 
   function personInUse(id) {
     return App.expenses().some(e => e.paidBy === id || (e.split && e.split[id])) || App.payments().some(p => p.from === id || p.to === id);
