@@ -278,6 +278,7 @@
   // Si al redibujar (p. ej. llega una sincronización) estabas escribiendo en un campo de la pantalla,
   // se mantiene el texto, el cursor y el teclado abierto.
   App.render = function () {
+    if (!App.started) return; // hasta que estén cargados todos los módulos (App.start)
     const ae = document.activeElement;
     let keep = null;
     if (ae && view.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) {
@@ -498,6 +499,7 @@ Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
   };
 
   App.start = function () {
+    App.started = true;
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
     App.render();
   };
