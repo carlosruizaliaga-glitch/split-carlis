@@ -445,7 +445,7 @@
       $('#ings').innerHTML = r.ingredients.map((ing, i) => {
         const p = pById[ing.product];
         return `<div class="item"><div class="grow ellipsis">${p ? esc(p.name) : '<span class="muted">Producto borrado</span>'}</div>
-          <input type="number" inputmode="decimal" step="any" min="0" class="qty-input" data-q="${i}" value="${ing.qty}"><span class="unit">${p ? esc(p.unit) : ''}</span>
+          <input type="text" inputmode="decimal" autocomplete="off" class="qty-input" data-q="${i}" value="${ing.qty}"><span class="unit">${p ? esc(p.unit) : ''}</span>
           <button class="xbtn" data-x="${i}" aria-label="Quitar">✕</button></div>`;
       }).join('') || '<div class="muted" style="padding:8px 0">Sin ingredientes todavía.</div>';
       m.querySelectorAll('[data-q]').forEach(inp => inp.oninput = () => { r.ingredients[+inp.dataset.q].qty = App.num(inp.value) || 0; drawCost(); });

@@ -218,9 +218,9 @@
       ${e.purchase ? `<div class="note">🛒 Viene de una compra. Al cambiar el importe aquí no cambia la compra.</div>` : ''}
       <label>Descripción</label><input id="desc" value="${esc(e.description)}" placeholder="Ej: Mercadona" maxlength="60" autocomplete="off">
       <label>Importe</label>
-      <div class="row"><input id="amt" type="number" inputmode="decimal" step="any" min="0" value="${esc(e.amount)}" placeholder="0" class="grow amount-input">
+      <div class="row"><input id="amt" type="text" inputmode="decimal" autocomplete="off" value="${esc(e.amount)}" placeholder="0" class="grow amount-input">
         <select id="cur" style="width:105px">${curs.map(c => `<option ${c === e.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-      <div id="rateBox"><label id="rateLbl"></label><input id="rate" type="number" inputmode="decimal" step="any" value="${esc(e.currency === 'EUR' ? '' : e.rate)}">
+      <div id="rateBox"><label id="rateLbl"></label><input id="rate" type="text" inputmode="decimal" autocomplete="off" value="${esc(e.currency === 'EUR' ? '' : e.rate)}">
         <div class="muted" id="conv" style="margin-top:4px"></div></div>
       <label>Pagado por</label><div class="seg" id="payer">${ps.map(p => `<button data-payer="${p.id}">${esc(p.name)}</button>`).join('')}</div>
       <label>Fecha</label><input id="date" type="date" value="${esc(e.date)}">
@@ -231,14 +231,14 @@
       <div id="splitBox"></div><div class="hint" id="splitHint"></div>
       <div class="actions">${isNew ? '' : '<button class="danger" id="del">Eliminar</button>'}<button id="cancel">Cancelar</button><button class="primary" id="ok">Guardar</button></div>`);
     const $ = s => m.querySelector(s);
-    const readAmount = () => parseFloat($('#amt').value) || 0;
-    const readRate = () => e.currency === 'EUR' ? 1 : (parseFloat($('#rate').value) || 0);
+    const readAmount = () => App.num($('#amt').value) || 0;
+    const readRate = () => e.currency === 'EUR' ? 1 : (App.num($('#rate').value) || 0);
 
     function build() {
       const split = {};
       ps.forEach(p => {
         if (e.mode === 'equal') { if (vals.equal[p.id]) split[p.id] = true; }
-        else { const v = parseFloat(vals[e.mode][p.id]); if (v > 0) split[p.id] = v; }
+        else { const v = App.num(vals[e.mode][p.id]); if (v > 0) split[p.id] = v; }
       });
       return Object.assign({}, e, { description: $('#desc').value.trim(), amount: readAmount(), rate: readRate(),
         date: $('#date').value || App.today(), split });
@@ -272,7 +272,7 @@
       box.innerHTML = ps.map(p => {
         const ctl = e.mode === 'equal'
           ? `<input type="checkbox" data-sp="${p.id}" ${vals.equal[p.id] ? 'checked' : ''}>`
-          : `<input type="number" inputmode="decimal" step="${e.mode === 'percent' ? 'any' : step}" min="0" data-sp="${p.id}" value="${esc(vals[e.mode][p.id])}" placeholder="0"><span>${e.mode === 'percent' ? '%' : esc(e.currency)}</span>`;
+          : `<input type="text" inputmode="decimal" autocomplete="off" data-sp="${p.id}" value="${esc(vals[e.mode][p.id])}" placeholder="0"><span>${e.mode === 'percent' ? '%' : esc(e.currency)}</span>`;
         return `<label class="split-row">${App.avatar(p, 1)}<span class="grow ellipsis">${esc(p.name)}</span><span class="muted" data-share="${p.id}"></span>${ctl}</label>`;
       }).join('');
       if (e.mode === 'percent' && ps.length === 2) {
@@ -296,7 +296,7 @@
           // Con dos personas en %, completa automáticamente la otra parte.
           if (e.mode === 'percent' && ps.length === 2 && inp.value !== '') {
             const other = ps.find(p => p.id !== inp.dataset.sp).id;
-            const v = parseFloat(inp.value);
+            const v = App.num(inp.value);
             if (v >= 0 && v <= 100) { vals.percent[other] = String(+(100 - v).toFixed(2)); const o = box.querySelector(`[data-sp="${other}"]`); if (o) o.value = vals.percent[other]; }
           }
           refreshShares();
@@ -307,9 +307,9 @@
 
     function fillRest() {
       const target = readAmount();
-      const empty = ps.map(p => p.id).filter(id => !(parseFloat(vals.exact[id]) > 0));
+      const empty = ps.map(p => p.id).filter(id => !(App.num(vals.exact[id]) > 0));
       if (!empty.length || !(target > 0)) return;
-      const used = ps.reduce((a, p) => a + (parseFloat(vals.exact[p.id]) || 0), 0);
+      const used = ps.reduce((a, p) => a + (App.num(vals.exact[p.id]) || 0), 0);
       const rest = target - used;
       if (rest <= 0) { App.toast('No queda nada por repartir'); return; }
       const unit = Math.pow(10, L.decimalsOf(e.currency));
@@ -384,14 +384,14 @@
       <div class="muted">Dinero que uno le da al otro para saldar cuentas.</div>
       <label>Quién paga</label><select id="from">${opts(p.from)}</select>
       <label>A quién</label><select id="to">${opts(p.to)}</select>
-      <label>Importe (€)</label><input id="amt" type="number" inputmode="decimal" step="any" value="${esc(p.amount === '' ? '' : +(+p.amount).toFixed(2))}">
+      <label>Importe (€)</label><input id="amt" type="text" inputmode="decimal" autocomplete="off" value="${esc(p.amount === '' ? '' : +(+p.amount).toFixed(2))}">
       <label>Fecha</label><input id="date" type="date" value="${esc(p.date)}">
       <label>Nota</label><input id="note" value="${esc(p.note)}" maxlength="60" placeholder="Opcional (Bizum, transferencia…)">
       <div class="actions">${isNew ? '' : '<button class="danger" id="del">Eliminar</button>'}<button id="cancel">Cancelar</button><button class="primary" id="ok">Guardar</button></div>`);
     const $ = s => m.querySelector(s);
     $('#cancel').onclick = App.closeSheet;
     $('#ok').onclick = () => {
-      const np = Object.assign({}, p, { from: $('#from').value, to: $('#to').value, amount: parseFloat($('#amt').value) || 0,
+      const np = Object.assign({}, p, { from: $('#from').value, to: $('#to').value, amount: App.num($('#amt').value) || 0,
         currency: 'EUR', rate: 1, date: $('#date').value || App.today(), note: $('#note').value.trim() });
       if (np.from === np.to) { App.toast('Quien paga y quien recibe deben ser distintos'); return; }
       if (!(np.amount > 0)) { App.toast('Importe no válido'); return; }

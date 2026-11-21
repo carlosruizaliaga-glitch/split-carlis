@@ -15,9 +15,10 @@
   let status = navigator.onLine ? 'idle' : 'offline'; // idle | syncing | ok | offline | bad_secret | error
   let timer = null, syncing = false, again = false, version = 0;
 
+  let persistError = null;
   function persist() {
-    try { localStorage.setItem(LS, JSON.stringify(db)); }
-    catch (e) { console.error(e); }
+    try { localStorage.setItem(LS, JSON.stringify(db)); persistError = null; }
+    catch (e) { console.error(e); persistError = e.message || String(e); }
   }
   function emit() { listeners.forEach(f => { try { f(); } catch (e) { console.error(e); } }); }
 
@@ -111,6 +112,7 @@
     onChange: f => listeners.push(f),
     status: () => status,
     version: () => version,
+    persistError: () => persistError,
     pending: () => Object.keys(db.outbox).length,
     lastSync: () => db.lastSync,
     loggedIn: () => !!db.secret,

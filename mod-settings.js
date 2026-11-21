@@ -18,7 +18,7 @@
         ${habitual && s.id === habitual.id ? '<span class="pill pos">habitual</span>' : ''}${s.compare === false ? ' <span class="pill zero">no compara</span>' : ''}</div>›</div>`).join('')}</div>
       <button class="block small ghost" id="addStore">＋ Añadir súper</button>
       <div class="card"><label style="margin-top:0">Recomendar ir a dos súpers si se ahorra al menos (€)</label>
-        <input id="thr" type="number" inputmode="decimal" step="0.5" min="0" value="${st.pairThreshold || 3}"></div>
+        <input id="thr" type="text" inputmode="decimal" autocomplete="off" value="${st.pairThreshold || 3}"></div>
 
       <h2>🍽️ Menú</h2><div class="card"><label style="margin-top:0">Comidas que planificáis</label>
         <div class="chips">${C.MEALS.map(m => `<button data-meal="${m.id}" class="${enabledMeals.includes(m.id) ? 'on' : ''}">${m.emoji} ${m.name}</button>`).join('')}</div>
@@ -32,7 +32,7 @@
       <h2>🏷️ Categorías de gastos</h2><div class="card list">${App.categories().map(c => `<div class="item tap" data-cat="${c.id}"><div class="emoji">${esc(c.emoji)}</div><div class="grow">${esc(c.name)}<div class="muted">${c.group ? esc(App.group(c.group).name) : 'Todos los grupos'}</div></div>›</div>`).join('')}</div>
       <button class="block small ghost" id="addCat">＋ Añadir categoría</button>
       <h2>💱 Monedas (unidades por 1 €)</h2><div class="card">
-        <div class="rates">${Object.keys(r).sort().map(c => `<label class="row"><span style="width:44px">${c}</span><input data-rate="${c}" type="number" inputmode="decimal" step="any" value="${r[c]}"></label>`).join('')}</div>
+        <div class="rates">${Object.keys(r).sort().map(c => `<label class="row"><span style="width:44px">${c}</span><input data-rate="${c}" type="text" inputmode="decimal" autocomplete="off" value="${r[c]}"></label>`).join('')}</div>
         <div class="row" style="margin-top:10px"><input id="newCur" placeholder="Otra (código, p. ej. AUD)" maxlength="3" style="text-transform:uppercase"><button class="small" id="addCur">Añadir</button></div>
         <button class="primary block" id="saveRates" style="margin-top:10px">Guardar tipos de cambio</button></div>
       <h2>🔄 Sincronización</h2><div class="card">
@@ -78,7 +78,7 @@
     $('#saveRates').onclick = () => {
       const nr = {};
       for (const inp of view.querySelectorAll('[data-rate]')) {
-        const v = parseFloat(inp.value);
+        const v = App.num(inp.value);
         if (!(v > 0)) { App.toast('Tipo no válido en ' + inp.dataset.rate); return; }
         nr[inp.dataset.rate] = v;
       }

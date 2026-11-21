@@ -261,7 +261,7 @@
 
   function newEssentialItem(p, n) {
     return { id: 'i-' + App.uid() + (n || ''), product: p.id, name: p.name, section: p.section,
-      amount: p.essentialQty || defaultAmount(p), checked: false, source: 'essential', addedAt: Date.now() };
+      amount: Math.max(p.essentialQty || 0, p.bulk ? 0 : (p.pack || 1)) || defaultAmount(p), checked: false, source: 'essential', addedAt: Date.now() };
   }
   function addEssential(p) {
     if (!p) return;
@@ -284,14 +284,19 @@
         const sec = App.section(e.p.section);
         if (sec.id !== lastSec) { h += `<div class="sechdr">${esc(sec.emoji)} ${esc(sec.name)}</div>`; lastSec = sec.id; }
         h += `<div class="item"><div class="grow"><div class="ellipsis">${esc(e.p.name)}</div><div class="muted">${e.never ? 'aún sin comprar' : 'última compra ' + essLabel(e)}</div></div>
-          <span class="muted">cada</span><input type="number" inputmode="numeric" min="1" step="1" class="every-input" data-every="${e.p.id}" value="${e.p.every || 30}"><span class="muted">d</span>
+          <span class="muted">cada</span><input type="text" inputmode="numeric" autocomplete="off" step="1" class="every-input" data-every="${e.p.id}" value="${e.p.every || 30}"><span class="muted">d</span>
           <button class="xbtn" data-unset="${e.p.id}" aria-label="Quitar de esenciales">✕</button></div>`;
       });
       $('#ess').innerHTML = h || '<div class="muted" style="padding:8px 0">No hay esenciales.</div>';
-      m.querySelectorAll('[data-every]').forEach(inp => inp.onchange = () => {
-        const v = Math.round(App.num(inp.value));
-        if (!(v > 0)) { App.toast('Pon un número de días'); return; }
-        S.put('product', Object.assign({}, S.get(inp.dataset.every), { every: v }));
+      m.querySelectorAll('[data-every]').forEach(inp => {
+        const saveEvery = () => {
+          const v = Math.round(App.num(inp.value));
+          const cur = S.get(inp.dataset.every);
+          if (!(v > 0) || !cur || cur.every === v) return;
+          S.put('product', Object.assign({}, cur, { every: v }));
+        };
+        inp.oninput = () => { clearTimeout(inp._t); inp._t = setTimeout(saveEvery, 600); };
+        inp.onchange = saveEvery; inp.onblur = saveEvery;
       });
       m.querySelectorAll('[data-unset]').forEach(b => b.onclick = () => {
         const p = S.get(b.dataset.unset);
@@ -305,7 +310,7 @@
       App.toast(`${shortName(p.name)} añadido a esenciales`);
       draw();
     });
-    $('#close').onclick = App.closeSheet;
+    $('#close').onclick = () => { m.querySelectorAll('[data-every]').forEach(i => i.onchange && i.onchange()); App.closeSheet(); };
     draw();
   }
 
@@ -322,10 +327,10 @@
     const m = App.sheet(`<h3>${esc(it.name)}</h3>
       ${p ? `<div class="muted">${esc(App.section(p.section).emoji)} ${esc(App.section(p.section).name)}${p.bulk ? ' · a granel' : ` · envase de ${esc(SL.fmtAmount(p.unit, p.pack))}`}</div>` : ''}
       ${!p ? `<label>Nombre</label><input id="nm" value="${esc(it.name)}" maxlength="60">` : ''}
-      <label>Cantidad (${esc(unitLbl)})</label><input id="qty" type="number" inputmode="decimal" step="any" min="0" value="${+(+qtyVal).toFixed(2)}">
+      <label>Cantidad (${esc(unitLbl)})</label><input id="qty" type="text" inputmode="decimal" autocomplete="off" value="${+(+qtyVal).toFixed(2)}">
       ${p && it.source === 'menu' ? `<div class="muted" style="margin-top:4px">El menú necesita ${esc(SL.fmtAmount(p.unit, it.amount))}.</div>` : ''}
       <label>Precio por ${per}${store && p ? ` en ${esc(store.name)}` : ''}</label>
-      <div class="row"><input id="price" type="number" inputmode="decimal" step="0.01" min="0" class="grow" value="${p ? (info ? info.p : '') : (it.price || '')}" placeholder="0,00">
+      <div class="row"><input id="price" type="text" inputmode="decimal" autocomplete="off" class="grow" value="${p ? (info ? info.p : '') : (it.price || '')}" placeholder="0,00">
         ${info ? App.srcBadge(info.src) : ''}${info && info.src === 'estimado' ? '<button class="small" id="confirmP">✓ Coincide</button>' : ''}</div>
       ${p ? `<div class="muted" style="margin-top:4px">Si no coincide con la etiqueta, ponlo bien: se guarda para ${esc(store ? store.name : 'este súper')}.</div>` : ''}
       ${otherPrices.length > 1 ? `<label>En otros súpers</label><div class="list tight">${otherPrices.map((x, i) => `<div class="item">${App.storeDot(x.s)}<div class="grow">${esc(x.s.name)}${i === 0 ? ' <span class="pill pos">más barato</span>' : ''}</div><div class="amount">${euros(x.info.p)} ${App.srcBadge(x.info.src)}</div></div>`).join('')}</div>` : ''}
@@ -333,23 +338,25 @@
       <div class="actions"><button class="danger" id="del">Quitar</button>${p ? '<button id="editP">Producto</button>' : ''}<button class="primary" id="ok">Guardar</button></div>`);
     const $ = s => m.querySelector(s);
     const priceBefore = $('#price').value;
-    $('#ok').onclick = () => {
+    $('#ok').onclick = () => App.safely('guardar la línea', () => {
       const q = App.num($('#qty').value);
       if (!(q > 0)) { App.toast('Cantidad no válida'); return; }
-      const upd = Object.assign({}, it, { note: $('#note').value.trim() });
+      if ($('#price').value.trim() && !(App.num($('#price').value) >= 0)) { App.toast('Precio no válido'); return; }
+      const upd = Object.assign({}, S.get(it.id) || it, { note: $('#note').value.trim() });
       upd.amount = p ? (p.bulk ? q : Math.ceil(q) * p.pack) : q;
       if (!p) { upd.name = $('#nm').value.trim() || it.name; const pr = App.num($('#price').value); upd.price = pr > 0 ? pr : undefined; }
       S.put('shopitem', upd);
       const pr = App.num($('#price').value);
       if (p && store && pr > 0 && $('#price').value !== priceBefore) setPrice(p, store, pr, 'manual');
       App.closeSheet();
-    };
+      App.toast('Guardado');
+    });
     if ($('#confirmP')) $('#confirmP').onclick = () => {
       setPrice(p, store, info.p, 'manual');
       $('#confirmP').remove(); App.toast(`Precio confirmado en ${store.name}`);
     };
     $('#del').onclick = () => { App.closeSheet(); App.removeWithUndo('shopitem', it, 'Quitado de la lista'); };
-    if ($('#editP')) $('#editP').onclick = () => openProduct(p, { stack: true });
+    if ($('#editP')) $('#editP').onclick = () => { App.closeSheet(); openProduct(S.get(p.id) || p); };
   }
 
   // Guarda el precio real de un producto en un súper (con historial).
@@ -372,7 +379,7 @@
       <div class="muted">${checked.length} producto${checked.length === 1 ? '' : 's'} en el carro. Se guardará la compra y se creará el gasto en Split.</div>
       <label>Súper</label><select id="st">${App.stores().map(s => `<option value="${s.id}" ${store && s.id === store.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
       <label>Pagado por</label><div class="seg">${ps.map(p => `<button data-payer="${p.id}">${esc(p.name)}</button>`).join('')}</div>
-      <label>Total del ticket (€)</label><input id="tot" type="number" inputmode="decimal" step="0.01" min="0" class="amount-input">
+      <label>Total del ticket (€)</label><input id="tot" type="text" inputmode="decimal" autocomplete="off" class="amount-input">
       <div class="muted" id="est" style="margin-top:4px"></div>
       <label>Fecha</label><input id="date" type="date" value="${App.today()}">
       <label class="row check-line"><input type="checkbox" id="mkExp" checked> Crear gasto en Split (🏠 Casa · 🛒 Supermercado · a medias)</label>
@@ -523,19 +530,19 @@
       <label>Nombre</label><input id="nm" value="${esc(p.name)}" maxlength="60" autocomplete="off" placeholder="Ej: Yogur griego (4 ud)">
       <label>Sección</label><select id="sec">${C.SECTIONS.map(s => `<option value="${s.id}" ${s.id === p.section ? 'selected' : ''}>${s.emoji} ${esc(s.name)}</option>`).join('')}</select>
       <label class="row check-line"><input type="checkbox" id="bulk" ${p.bulk ? 'checked' : ''}> Se compra a granel (precio por kg o litro)</label>
-      <div class="row" id="packRow"><div class="grow"><label>Tamaño del envase</label><input id="pack" type="number" inputmode="decimal" step="any" min="0" value="${p.pack}"></div>
+      <div class="row" id="packRow"><div class="grow"><label>Tamaño del envase</label><input id="pack" type="text" inputmode="decimal" autocomplete="off" value="${p.pack}"></div>
         <div style="width:110px"><label>Unidad</label><select id="unit">${[['g', 'gramos'], ['ml', 'ml'], ['ud', 'unidades']].map(([u, n]) => `<option value="${u}" ${u === p.unit ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
       <label class="row check-line"><input type="checkbox" id="staple" ${p.staple ? 'checked' : ''}> De despensa (al crear la lista desde el menú sale desmarcado)</label>
       <label class="row check-line"><input type="checkbox" id="essential" ${p.essential ? 'checked' : ''}> Esencial: lo compramos aunque no esté en el menú</label>
-      <div class="row" id="everyRow" style="margin-top:6px"><span class="grow muted">Se suele reponer cada</span><input id="every" type="number" inputmode="numeric" min="1" step="1" class="every-input" value="${p.every || 30}"><span class="muted">días</span></div>
+      <div class="row" id="everyRow" style="margin-top:6px"><span class="grow muted">Se suele reponer cada</span><input id="every" type="text" inputmode="numeric" autocomplete="off" step="1" class="every-input" value="${p.every || 30}"><span class="muted">días</span></div>
       <label id="priceLbl">Precios</label>
       <div class="list tight">${stores.map(s => {
         const r = p.prices && p.prices[s.id];
         const est = p.price > 0 ? SL.round2(p.price * (s.factor || 1)) : null;
         return `<div class="item">${App.storeDot(s)}<div class="grow">${esc(s.name)}<div class="muted">${r ? `${r.src === 'web' ? 'web' : r.src === 'ticket' ? 'ticket' : 'apuntado'} ${new Date(r.t || Date.now()).toLocaleDateString('es-ES')}` : est != null ? `estimado ${euros(est)}` : 'sin precio'}</div></div>
-          <input type="number" inputmode="decimal" step="0.01" min="0" class="price-input" data-ps="${s.id}" value="${r ? r.p : ''}" placeholder="${est != null ? est.toFixed(2) : '0,00'}">${r ? `<button class="xbtn" data-clr="${s.id}" aria-label="Quitar precio">✕</button>` : '<span class="xbtn"></span>'}</div>`;
+          <input type="text" inputmode="decimal" autocomplete="off" class="price-input" data-ps="${s.id}" value="${r ? r.p : ''}" placeholder="${est != null ? est.toFixed(2) : '0,00'}">${r ? `<button class="xbtn" data-clr="${s.id}" aria-label="Quitar precio">✕</button>` : '<span class="xbtn"></span>'}</div>`;
       }).join('')}</div>
-      <label>Precio orientativo (para súpers sin precio apuntado)</label><input id="base" type="number" inputmode="decimal" step="0.01" min="0" value="${p.price || ''}">
+      <label>Precio orientativo (para súpers sin precio apuntado)</label><input id="base" type="text" inputmode="decimal" autocomplete="off" value="${p.price || ''}">
       ${(p.log || []).length ? `<label>Historial de precios</label><div class="list tight">${p.log.slice().reverse().slice(0, 10).map(l => {
         const s = S.get(l.s) || { name: '¿?' };
         return `<div class="item"><div class="grow">${esc(s.name)} <span class="muted">${new Date(l.t).toLocaleDateString('es-ES')}</span></div><div class="amount">${euros(l.p)}</div></div>`;
@@ -553,11 +560,19 @@
     const syncEss = () => { $('#everyRow').style.display = $('#essential').checked ? '' : 'none'; };
     $('#essential').onchange = syncEss; syncEss();
     const cleared = new Set();
-    m.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => { cleared.add(b.dataset.clr); m.querySelector(`[data-ps="${b.dataset.clr}"]`).value = ''; });
+    m.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => {
+      cleared.add(b.dataset.clr);
+      const inp = m.querySelector(`[data-ps="${b.dataset.clr}"]`); inp.value = ''; inp.placeholder = 'se quitará';
+    });
     $('#cancel').onclick = App.closeSheet;
-    $('#ok').onclick = () => {
+    $('#ok').onclick = () => App.safely('guardar el producto', () => {
       p.name = $('#nm').value.trim();
       if (!p.name) { App.toast('Ponle un nombre'); return; }
+      // Antes de tocar nada, comprueba que todos los números se entienden.
+      const bad = [...m.querySelectorAll('[data-ps]')].find(inp => inp.value.trim() && !(App.num(inp.value) >= 0));
+      if (bad) { App.toast(`Precio no válido en ${(S.get(bad.dataset.ps) || {}).name || 'un súper'}`); bad.focus(); return; }
+      if ($('#base').value.trim() && !(App.num($('#base').value) >= 0)) { App.toast('Precio orientativo no válido'); return; }
+      if (!$('#bulk').checked && $('#pack').value.trim() && !(App.num($('#pack').value) > 0)) { App.toast('Tamaño del envase no válido'); return; }
       p.section = $('#sec').value; p.bulk = $('#bulk').checked; p.unit = $('#unit').value; p.staple = $('#staple').checked;
       p.essential = $('#essential').checked; p.every = Math.round(App.num($('#every').value)) || p.every || 30;
       p.pack = p.bulk ? (p.unit === 'ud' ? 1 : 1000) : (App.num($('#pack').value) || 1);
@@ -567,7 +582,7 @@
         const v = App.num(inp.value), sid = inp.dataset.ps, old = p.prices[sid];
         if (v > 0) {
           if (!old || Math.abs(old.p - v) > 0.004) { p.prices[sid] = { p: SL.round2(v), t: Date.now(), src: 'manual' }; p.log.push({ s: sid, p: SL.round2(v), t: Date.now(), src: 'manual' }); }
-        } else if (cleared.has(sid) || (old && inp.value === '')) delete p.prices[sid];
+        } else if (cleared.has(sid)) delete p.prices[sid]; // solo se borra con la ✕
       });
       p.log = p.log.slice(-30);
       S.put('product', p);
@@ -577,7 +592,7 @@
       App.closeSheet();
       App.toast('Producto guardado');
       if (opts.onSaved) opts.onSaved(p);
-    };
+    });
     const del = $('#del');
     if (del) del.onclick = async () => {
       const inRecipes = App.recipes().filter(r => (r.ingredients || []).some(i => i.product === p.id)).length;

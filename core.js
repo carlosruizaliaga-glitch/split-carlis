@@ -67,7 +67,13 @@
   App.storeDot = s => `<span class="sdot" style="background:${esc(s.color || '#999')}"></span>`;
   App.srcBadge = src => src === 'estimado' ? '<span class="badge est" title="Precio orientativo">est.</span>'
     : src === 'web' ? '<span class="badge web">web</span>' : src === 'ticket' ? '<span class="badge real">ticket</span>' : '<span class="badge real">real</span>';
-  App.num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : NaN; };
+  // Lee números escritos a la española o a la inglesa: "0,89", "0.89", "1.234,56", "3 €".
+  App.num = v => {
+    let s = String(v == null ? '' : v).trim().replace(/[€\s]/g, '');
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(s);
+    return isFinite(n) ? n : NaN;
+  };
 
   // ---------- Avisos, diálogos y hojas ----------
   App.toast = function (msg, opts) {
@@ -156,7 +162,8 @@
     const st = S.status(), pend = S.pending();
     const dot = document.getElementById('syncDot'), txt = document.getElementById('syncTxt');
     let cls = '', t = '';
-    if (st === 'syncing') { cls = 'warn'; t = 'Sincronizando'; }
+    if (S.persistError && S.persistError()) { cls = 'err'; t = 'No se guarda en el móvil'; }
+    else if (st === 'syncing') { cls = 'warn'; t = 'Sincronizando'; }
     else if (st === 'bad_secret') { cls = 'err'; t = 'Código no válido'; }
     else if (st === 'offline') { cls = 'warn'; t = pend ? `Sin conexión · ${pend}` : 'Sin conexión'; }
     else if (st === 'error') { cls = 'err'; t = pend ? `Error · ${pend}` : 'Error'; }
@@ -208,7 +215,24 @@
     } catch (e) { console.warn(e); }
     location.reload();
   };
-  window.addEventListener('error', ev => { if (!view.innerHTML.trim()) showFailure(ev.error || ev.message); });
+  // Cualquier error inesperado se enseña (antes podía fallar un botón sin que se notara).
+  const reportError = err => {
+    console.error(err);
+    if (!view.innerHTML.trim()) return showFailure(err);
+    App.toast('⚠️ Algo ha fallado: ' + ((err && err.message) || err));
+  };
+  window.addEventListener('error', ev => reportError(ev.error || ev.message));
+  window.addEventListener('unhandledrejection', ev => reportError(ev.reason));
+  // Ejecuta una acción de guardar y, si falla, lo dice claramente.
+  App.safely = function (what, fn) {
+    try { return fn(); } catch (e) {
+      console.error(e);
+      App.notify(`No se ha podido ${what}.
+${(e && e.message) || e}
+
+Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
+    }
+  };
 
   function renderInner() {
     lastVersion = S.version();
