@@ -55,10 +55,11 @@
       <div class="row" style="margin-top:10px"><div class="grow"><b>${checked.length}/${items.length}</b> en el carro</div>
         <div><b>${euros(inCart)}</b> <span class="muted">de ${euros(total)}</span></div></div>
       <div class="bar"><span style="width:${items.length ? checked.length / items.length * 100 : 0}%"></span></div>
-      ${items.length && !tplOpen ? `<button class="ghost block small" id="tplToggle">＋ Plantillas, menú y repetir compra</button>` : `
+      <div class="btnrow" style="margin-top:10px"><button class="ghost" id="fromMenu">📅 Desde el menú</button><button class="ghost" id="fromRecipes">🍳 Desde recetas</button></div>
+      ${items.length && !tplOpen ? `<button class="ghost block small" id="tplToggle">＋ Plantillas y repetir compra</button>` : `
       <div class="section-label">Plantillas</div>
       <div class="chips">${C.SHOP_TEMPLATES.map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
-      <div class="btnrow"><button class="ghost" id="fromMenu">🍽️ Desde el menú</button><button class="ghost" id="repeat">⎘ Repetir una compra</button></div>
+      <div class="btnrow"><button class="ghost" id="repeat">⎘ Repetir una compra</button></div>
       ${items.length ? '<button class="ghost block small" id="tplToggle">Ocultar plantillas</button>' : ''}`}
     </div>
     ${essentialsCard()}
@@ -105,6 +106,7 @@
     view.querySelectorAll('[data-store]').forEach(b => b.onclick = () => { App.setCurrentStore(b.dataset.store); App.render(); });
     view.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => applyTemplate(C.SHOP_TEMPLATES.find(t => t.id === b.dataset.tpl)));
     if ($('#fromMenu')) $('#fromMenu').onclick = () => App.go('menu', 'week');
+    if ($('#fromRecipes')) $('#fromRecipes').onclick = () => App.modules.recipes.startPicking();
     if ($('#repeat')) $('#repeat').onclick = openRepeat;
     if ($('#tplToggle')) $('#tplToggle').onclick = () => { tplOpen = !tplOpen; App.render(); };
     view.querySelectorAll('[data-chk]').forEach(b => b.onclick = () => {

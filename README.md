@@ -5,7 +5,7 @@ Gastos, menú semanal y lista de la compra de Carlos y Amparo (y de Monchi y Hie
 ## Módulos
 - **💶 Gastos**: saldo entre los dos, movimientos, resumen. Grupos (Casa, Ocio, Viajes…), categorías, varias monedas, reparto a medias / % / importes.
 - **🍽️ Menú**: semana con desayuno, comida, cena y tupper. Plantillas de semana, "sugerir huecos", copiar semana anterior.
-  - *Comidas*: cada una con sus ingredientes y cantidades para 1 persona. Se eligen varias y se mandan al menú (se reparten en huecos libres) o a la lista de la compra (indicando cuántas personas comen).
+- **Recetas** (pestaña propia, conectada con Menú y Compra): cada receta con sus ingredientes y cantidades para 1 persona. Su ficha muestra los ingredientes para N personas y el coste, con «📅 Al menú» y «🛒 A la lista». También se pueden elegir varias a la vez (desde Recetas, desde «Planificar eligiendo recetas» en Menú o desde «🍳 Desde recetas» en Compra).
 - **🛒 Compra**:
   - *Lista*: estilo maleta de Wanderfin (plantillas, sin duplicados, secciones del súper, cantidades −/+), creada a mano o desde el menú con cantidades y precios.
   - *Esenciales*: lo que se compra aunque no esté en el menú (leche, café, sal, especias, limpieza, higiene, Monchi y Hierba…). Cada uno con su frecuencia; avisa de lo que toca reponer según la última compra.

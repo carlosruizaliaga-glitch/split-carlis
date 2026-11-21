@@ -137,7 +137,8 @@
   // ---------- Navegación ----------
   const MODS = [
     { id: 'split', icon: '💶', name: 'Gastos', title: 'Gastos', subs: [['balance', 'Saldo'], ['moves', 'Movimientos'], ['stats', 'Resumen']] },
-    { id: 'menu', icon: '🍽️', name: 'Menú', title: 'Menú semanal', subs: [['week', 'Semana'], ['recipes', 'Comidas']] },
+    { id: 'menu', icon: '📅', name: 'Menú', title: 'Menú semanal', subs: [] },
+    { id: 'recipes', icon: '🍳', name: 'Recetas', title: 'Recetas', subs: [] },
     { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['compare', 'Comparar'], ['prices', 'Precios'], ['savings', 'Ahorro']] },
     { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [] }
   ];
