@@ -22,7 +22,7 @@ window.DEFAULTS = {
     ['c-limpieza', '🧽', 'Limpieza y hogar', 'g-casa'],
     ['c-muebles', '🛋️', 'Muebles y decoración', 'g-casa'],
     ['c-reparaciones', '🔧', 'Reparaciones', 'g-casa'],
-    ['c-monchi', '🐱', 'Monchi', 'g-casa'],
+    ['c-monchi', '🐱', 'Monchi y Hierba', 'g-casa'],
     ['c-restaurantes', '🍽️', 'Restaurantes', 'g-ocio'],
     ['c-bares', '🍻', 'Bares y copas', 'g-ocio'],
     ['c-cine', '🎬', 'Cine y espectáculos', 'g-ocio'],

@@ -18,7 +18,7 @@
     ['bebidas', '🧃', 'Bebidas'],
     ['limpieza', '🧽', 'Limpieza'],
     ['higiene', '🧴', 'Higiene'],
-    ['mascota', '🐱', 'Monchi'],
+    ['mascota', '🐱', 'Monchi y Hierba'],
     ['otros', '📦', 'Otros']
   ].map(([id, emoji, name], i) => ({ id, emoji, name, order: i }));
 
@@ -166,7 +166,7 @@
     ['p-champu', 'Champú', 'higiene', 'ud', 1, 1.80, 0],
     ['p-pasta-dientes', 'Pasta de dientes', 'higiene', 'ud', 1, 1.50, 0],
     ['p-desodorante', 'Desodorante', 'higiene', 'ud', 1, 1.70, 0],
-    // Monchi
+    // Monchi y Hierba
     ['p-pienso', 'Pienso para gato (2 kg)', 'mascota', 'ud', 1, 6.50, 0],
     ['p-arena', 'Arena para gato (5 kg)', 'mascota', 'ud', 1, 3.50, 0],
     ['p-latas-gato', 'Comida húmeda gato (12 sobres)', 'mascota', 'ud', 1, 5.50, 0],
@@ -269,7 +269,7 @@
     { id: 'frescos', name: 'Frescos', emoji: '🥩', items: [['p-huevos', 12], ['p-pechuga', 600], ['p-picada', 500], ['p-york', 200], ['p-queso-lonchas', 250], ['p-pan-barra', 2]] },
     { id: 'limpieza', name: 'Limpieza', emoji: '🧽', items: [['p-detergente', 1], ['p-pastillas-lavavajillas', 1], ['p-papel-higienico', 1], ['p-papel-cocina', 1], ['p-bolsas-basura', 1], ['p-friegasuelos', 1], ['p-lavavajillas-mano', 1]] },
     { id: 'higiene', name: 'Higiene', emoji: '🧴', items: [['p-gel', 1], ['p-champu', 1], ['p-pasta-dientes', 1], ['p-desodorante', 1]] },
-    { id: 'monchi', name: 'Monchi', emoji: '🐱', items: [['p-pienso', 1], ['p-arena', 1], ['p-latas-gato', 1], ['p-snacks-gato', 1]] },
+    { id: 'monchi', name: 'Monchi y Hierba', emoji: '🐱', items: [['p-pienso', 1], ['p-arena', 1], ['p-latas-gato', 1], ['p-snacks-gato', 1]] },
     { id: 'bebidas', name: 'Bebidas', emoji: '🧃', items: [['p-agua', 9000], ['p-cerveza', 12], ['p-refresco', 2000], ['p-zumo', 1000]] }
   ];
 

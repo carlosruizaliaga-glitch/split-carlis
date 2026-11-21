@@ -1,6 +1,6 @@
-# Split Carlis 🐱
+# Split Carlis 🐱🐈‍⬛
 
-Gastos, menú semanal y lista de la compra de Carlos y Amparo. App web instalable (PWA).
+Gastos, menú semanal y lista de la compra de Carlos y Amparo (y de Monchi y Hierba). App web instalable (PWA).
 
 ## Módulos
 - **💶 Gastos**: saldo entre los dos, movimientos, resumen. Grupos (Casa, Ocio, Viajes…), categorías, varias monedas, reparto a medias / % / importes.
@@ -8,7 +8,7 @@ Gastos, menú semanal y lista de la compra de Carlos y Amparo. App web instalabl
   - *Comidas*: cada una con sus ingredientes y cantidades para 1 persona. Se eligen varias y se mandan al menú (se reparten en huecos libres) o a la lista de la compra (indicando cuántas personas comen).
 - **🛒 Compra**:
   - *Lista*: estilo maleta de Wanderfin (plantillas, sin duplicados, secciones del súper, cantidades −/+), creada a mano o desde el menú con cantidades y precios.
-  - *Esenciales*: lo que se compra aunque no esté en el menú (leche, café, sal, especias, limpieza, higiene, Monchi…). Cada uno con su frecuencia; avisa de lo que toca reponer según la última compra.
+  - *Esenciales*: lo que se compra aunque no esté en el menú (leche, café, sal, especias, limpieza, higiene, Monchi y Hierba…). Cada uno con su frecuencia; avisa de lo que toca reponer según la última compra.
   - *Terminar compra*: guarda la compra y crea el gasto en Split (Casa · Supermercado · a medias).
   - *Comparar*: total en cada súper, si compensa ir a dos y alternativas más baratas.
   - *Precios*: precio por súper editable con historial. Los "est." son orientativos hasta que se apunte el real.

@@ -34,7 +34,7 @@
     header { position: sticky; top: 0; z-index: 8; background: color-mix(in srgb, var(--bg) 88%, transparent);
       -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
       padding: calc(10px + env(safe-area-inset-top)) 16px 6px; display: flex; align-items: center; gap: 10px; }
-    header img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--accent); }
+    header img.cats { width: 80px; height: 40px; border-radius: 12px; object-fit: cover; object-position: center; box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--accent); }
     header h1 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
     header .sub { color: var(--muted); font-size: 12px; }
     #syncBtn { margin-left: auto; background: var(--card); border: 1px solid var(--line); padding: 6px 10px; border-radius: 99px;
@@ -147,7 +147,7 @@
     .mlabels { display: flex; gap: 4px; margin-top: 4px; }
     .mlabels > div { flex: 1; text-align: center; font-size: 10px; color: var(--muted); }
     .login { max-width: 400px; margin: 0 auto; padding: calc(40px + env(safe-area-inset-top)) 4px 40px; text-align: center; }
-    .login img { width: 140px; height: 140px; border-radius: 50%; object-fit: cover; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+    .login img { width: 100%; max-width: 360px; aspect-ratio: 2 / 1; border-radius: 22px; object-fit: cover; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
     .login h1 { margin: 16px 0 4px; }
     .login .card { text-align: left; }
     .banner { background: var(--neg-soft); color: var(--neg); border-radius: 12px; padding: 10px 12px; margin: 10px 0; font-size: 14px; font-weight: 600; }
@@ -202,7 +202,7 @@
 </head>
 <body class="noapp">
   <header>
-    <img src="icon-192.png" alt="">
+    <img src="cats-wide.jpg?v=5" alt="Monchi y Hierba" class="cats">
     <div><h1 id="title">Split Carlis</h1><div class="sub" id="subtitle"></div></div>
     <button id="syncBtn" aria-label="Sincronizar"><span class="dot" id="syncDot"></span><span id="syncTxt"></span></button>
   </header>
@@ -210,16 +210,16 @@
   <main id="view"></main>
   <button class="fab" id="fab" aria-label="Añadir" hidden>+</button>
   <nav class="tabs" id="nav"></nav>
-  <script src="logic.js?v=4"></script>
-  <script src="shoplogic.js?v=4"></script>
-  <script src="store.js?v=4"></script>
-  <script src="defaults.js?v=4"></script>
-  <script src="catalog.js?v=4"></script>
-  <script src="core.js?v=4"></script>
-  <script src="mod-split.js?v=4"></script>
-  <script src="mod-menu.js?v=4"></script>
-  <script src="mod-shop.js?v=4"></script>
-  <script src="mod-settings.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="logic.js?v=5"></script>
+  <script src="shoplogic.js?v=5"></script>
+  <script src="store.js?v=5"></script>
+  <script src="defaults.js?v=5"></script>
+  <script src="catalog.js?v=5"></script>
+  <script src="core.js?v=5"></script>
+  <script src="mod-split.js?v=5"></script>
+  <script src="mod-menu.js?v=5"></script>
+  <script src="mod-shop.js?v=5"></script>
+  <script src="mod-settings.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

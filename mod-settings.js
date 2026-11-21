@@ -47,7 +47,7 @@
         <button class="block" id="csv" style="margin-top:8px">📊 Exportar gastos a CSV (Excel)</button>
         <button class="block" id="imp" style="margin-top:8px">📥 Importar copia</button>
         <input type="file" id="file" accept="application/json,.json" style="display:none"></div>
-      <div class="muted center" style="margin-top:18px">Split Carlis 🐱 · con la supervisión de Monchi</div>`;
+      <div class="muted center" style="margin-top:18px">Split Carlis · con la supervisión de Monchi y Hierba 🐱🐈‍⬛</div>`;
     view.innerHTML = h;
     const $ = s => view.querySelector(s);
     view.querySelectorAll('[data-me]').forEach(b => b.onclick = () => { S.setMe(b.dataset.me); App.render(); });

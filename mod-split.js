@@ -23,10 +23,10 @@
       const other = ps.find(p => p.id !== me);
       hero = b > 0 ? `<div class="muted">${esc(other.name)} te debe</div><div class="big pos">${eur(b)}</div>`
         : b < 0 ? `<div class="muted">Le debes a ${esc(other.name)}</div><div class="big neg">${eur(-b)}</div>`
-        : `<div class="big">Estáis en paz 🐱</div><div class="muted">Nadie debe nada</div>`;
+        : `<div class="big">Estáis en paz 🐱🐈‍⬛</div><div class="muted">Nadie debe nada</div>`;
     } else {
       hero = b > 0 ? `<div class="muted">Te deben</div><div class="big pos">${eur(b)}</div>`
-        : b < 0 ? `<div class="muted">Debes</div><div class="big neg">${eur(-b)}</div>` : `<div class="big">En paz 🐱</div>`;
+        : b < 0 ? `<div class="muted">Debes</div><div class="big neg">${eur(-b)}</div>` : `<div class="big">En paz 🐱🐈‍⬛</div>`;
     }
     let h = `<div class="card hero">${hero}</div>`;
     if (plan.length) {

@@ -266,8 +266,8 @@
   // ---------- Entrada con código ----------
   async function renderLogin() {
     document.getElementById('subtabs').hidden = true;
-    view.innerHTML = `<div class="login"><img src="icon-512.png" alt="Monchi"><h1>Split Carlis</h1>
-      <div class="muted">Gastos, menú y compra de casa</div><div class="card" id="loginCard"><div class="muted">Conectando…</div></div></div>`;
+    view.innerHTML = `<div class="login"><img src="cats-wide.jpg?v=5" alt="Monchi y Hierba"><h1>Split Carlis</h1>
+      <div class="muted">Gastos, menú y compra de casa · con Monchi y Hierba 🐱🐈‍⬛</div><div class="card" id="loginCard"><div class="muted">Conectando…</div></div></div>`;
     const card = view.querySelector('#loginCard');
     let serverState;
     try { serverState = await S.serverStatus(); } catch (e) {
@@ -312,7 +312,7 @@
   function renderWhoAmI() {
     document.getElementById('subtabs').hidden = true;
     const ps = App.people();
-    view.innerHTML = `<div class="login"><img src="icon-512.png" alt="Monchi"><h1>¿Quién eres?</h1>
+    view.innerHTML = `<div class="login"><img src="cats-wide.jpg?v=5" alt="Monchi y Hierba"><h1>¿Quién eres?</h1>
       <div class="muted">Así la app sabe quién paga por defecto en este móvil.</div>
       <div class="card list">${ps.length ? ps.map(p => `<div class="item tap" data-me="${p.id}">${App.avatar(p)}<div class="grow"><b>${esc(p.name)}</b></div>›</div>`).join('')
         : '<div class="muted">Cargando…</div>'}</div></div>`;
