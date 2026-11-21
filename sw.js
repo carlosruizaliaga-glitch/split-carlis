@@ -1,6 +1,6 @@
 // Service worker: guarda la app en caché para que funcione sin conexión.
-const CACHE = 'split-carlis-v1';
-const FILES = ['./', 'index.html', 'app.js', 'logic.js', 'manifest.webmanifest', 'store.js', 'defaults.js', 'favicon.png', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'split-carlis-v2';
+const FILES = ['./', 'index.html', 'app.js', 'core.js', 'logic.js', 'shoplogic.js', 'store.js', 'defaults.js', 'catalog.js', 'mod-split.js', 'mod-menu.js', 'mod-shop.js', 'mod-settings.js', 'manifest.webmanifest', 'favicon.png', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

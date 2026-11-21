@@ -36,11 +36,24 @@
     return data;
   }
 
-  function put(kind, data, deleted) {
+  function write(kind, data, deleted) {
     const old = db.items[data.id];
     const updated_at = Math.max(Date.now(), old ? old.updated_at + 1 : 0);
     db.items[data.id] = { id: data.id, kind, data, updated_at, deleted: !!deleted };
     db.outbox[data.id] = updated_at;
+  }
+
+  function put(kind, data, deleted) {
+    write(kind, data, deleted);
+    version++;
+    persist(); emit(); schedule(600);
+  }
+
+  // Varios cambios de golpe: se guarda y se avisa una sola vez.
+  // changes: [{ kind, data, deleted? }]
+  function putMany(changes) {
+    if (!changes.length) return;
+    changes.forEach(c => write(c.kind, c.data, c.deleted));
     version++;
     persist(); emit(); schedule(600);
   }
@@ -107,6 +120,7 @@
     get: id => (db.items[id] && !db.items[id].deleted) ? db.items[id].data : null,
     has: id => !!db.items[id],
     put: (kind, data) => put(kind, data, false),
+    putMany: changes => putMany(changes),
     remove: (kind, data) => put(kind, data, true),
     syncNow: () => sync(),
     // Estado del servidor: 'new' (sin código) o 'configured'.
@@ -123,7 +137,7 @@
     logout: () => { version++; db = { items: {}, outbox: {}, since: null, secret: null, me: null, lastSync: null }; persist(); emit(); },
     exportAll: () => Object.values(db.items),
     importAll: items => {
-      items.forEach(i => { if (i && i.id && i.kind && i.data) put(i.kind, i.data, i.deleted); });
+      putMany(items.filter(i => i && i.id && i.kind && i.data).map(i => ({ kind: i.kind, data: i.data, deleted: i.deleted })));
     }
   };
   root.Store = Store;

@@ -1,15 +1,25 @@
 # Split Carlis 🐱
 
-Gastos compartidos de Carlos y Amparo: casa, ocio y viajes. App web instalable (PWA).
+Gastos, menú semanal y lista de la compra de Carlos y Amparo. App web instalable (PWA).
 
-- Datos compartidos en la nube (Supabase, proyecto "Split Carlis") y copia en cada móvil: funciona sin conexión y sincroniza al volver la red.
-- Acceso con un código de casa común (se crea la primera vez que se abre).
-- Grupos (Casa, Ocio, Viajes… y los que añadáis), categorías editables, varias monedas.
+## Módulos
+- **💶 Gastos**: saldo entre los dos, movimientos, resumen. Grupos (Casa, Ocio, Viajes…), categorías, varias monedas, reparto a medias / % / importes.
+- **🍽️ Menú**: semana con desayuno, comida, cena y tupper. Plantillas de semana, "sugerir huecos", copiar semana anterior y recetas editables con ingredientes por ración.
+- **🛒 Compra**:
+  - *Lista*: estilo maleta de Wanderfin (plantillas, sin duplicados, secciones del súper, cantidades −/+), creada a mano o desde el menú con cantidades y precios.
+  - *Terminar compra*: guarda la compra y crea el gasto en Split (Casa · Supermercado · a medias).
+  - *Comparar*: total en cada súper, si compensa ir a dos y alternativas más baratas.
+  - *Precios*: precio por súper editable con historial. Los "est." son orientativos hasta que se apunte el real.
+  - *Ahorro*: acumulado y por mes frente a la media de los súpers.
 
-## Instalar
-Publicar en GitHub Pages (Settings → Pages → rama `main`, carpeta raíz) y abrir la URL en el móvil:
-- iPhone (Safari): Compartir → Añadir a pantalla de inicio.
-- Android (Chrome): menú ⋮ → Instalar app.
+## Datos
+Supabase (proyecto "Split Carlis"): tabla `sc_items`, un registro por dato (gasto, receta, hueco del menú, producto…), con "gana el último cambio". Copia en cada móvil: funciona sin conexión y sincroniza al volver la red. Acceso con el código de casa.
+
+## Archivos
+`core.js` (común y navegación) · `mod-split.js` · `mod-menu.js` · `mod-shop.js` · `mod-settings.js` · `logic.js` (cálculo de deudas) · `shoplogic.js` (precios y comparador) · `catalog.js` (súpers, productos, recetas y plantillas iniciales) · `store.js` (almacén y sincronización).
+
+## Probar en local
+`python -m http.server 8766` y abrir `test.html` (nube simulada, no toca los datos reales; no se sube a git).
 
 ## Nota
-El plan gratuito de Supabase pausa el proyecto si pasa 1 semana sin ningún uso. Si ocurre, se reactiva en supabase.com → proyecto Split Carlis → "Restore". Mientras tanto la app sigue funcionando en el móvil y sube los cambios al reactivarlo.
+El plan gratuito de Supabase pausa el proyecto si pasa 1 semana sin ningún uso. Si ocurre: supabase.com → proyecto Split Carlis → "Restore".
