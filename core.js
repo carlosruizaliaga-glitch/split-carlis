@@ -190,7 +190,9 @@
     { id: 'menu', icon: '📅', name: 'Menú', title: 'Menú semanal', subs: [] },
     { id: 'recipes', icon: '🍳', name: 'Recetas', title: 'Recetas', subs: [] },
     { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['pantry', 'Despensa'], ['prices', 'Productos'], ['compare', 'Comparar'], ['savings', 'Ahorro']] },
-    { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [] }
+    { id: 'chores', icon: '🧹', name: 'Tareas', title: 'Tareas', subs: [['week', 'Semana'], ['list', 'Tareas'], ['rank', 'Ranking']] },
+    // Ajustes no va en la barra: se abre con el ⚙️ de la cabecera.
+    { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [], hidden: true }
   ];
   // La app siempre se abre en Inicio; de cada módulo se recuerda la última pestaña.
   const nav = (() => { try { return JSON.parse(localStorage.getItem('splitcarlis.nav')) || {}; } catch (e) { return {}; } })();
@@ -253,8 +255,9 @@
 
   const view = App.view = document.getElementById('view');
   const navEl = document.getElementById('nav');
-  navEl.innerHTML = MODS.map(m => `<button data-mod="${m.id}"><span class="ic">${m.icon}</span>${m.name}</button>`).join('');
-  navEl.querySelectorAll('[data-mod]').forEach(b => b.addEventListener('click', () => App.go(b.dataset.mod, b.dataset.mod === 'settings' ? 'hub' : null)));
+  navEl.innerHTML = MODS.filter(m => !m.hidden).map(m => `<button data-mod="${m.id}"><span class="ic">${m.icon}</span>${m.name}</button>`).join('');
+  navEl.querySelectorAll('[data-mod]').forEach(b => b.addEventListener('click', () => App.go(b.dataset.mod)));
+  document.getElementById('setBtn').addEventListener('click', () => App.go('settings', 'hub'));
   document.getElementById('syncBtn').addEventListener('click', () => { S.syncNow(); App.toast('Sincronizando…'); });
   const fab = document.getElementById('fab');
   fab.addEventListener('click', () => { if (App.fabAction) App.fabAction(); });
@@ -404,6 +407,7 @@ Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
     renderHeader();
     renderSubtabs(mod);
     navEl.querySelectorAll('[data-mod]').forEach(b => b.classList.toggle('active', b.dataset.mod === mod.id));
+    document.body.classList.toggle('on-settings', mod.id === 'settings');
     App.fabAction = null;
     // Conserva la posición de scroll al refrescar por sincronización.
     const y = window.scrollY;
@@ -442,6 +446,8 @@ Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
         }
       });
       C.RECIPES.forEach(r => { if (!S.has(r.id)) changes.push({ kind: 'recipe', data: r }); });
+      // v6: tareas del hogar y premios de ejemplo (editables).
+      if ((st.catalogVersion || 1) < 6 && App.choreSeed && !S.list('chore').length) App.choreSeed().forEach(x => changes.push(x));
       if ((st.catalogVersion || 1) < 5) {
         if (!S.list('section').length) C.SECTIONS.forEach((x, i) => changes.push({ kind: 'section', data: { id: 'sec-' + x.id, key: x.id, emoji: x.emoji, name: x.name, order: i } }));
         if (!S.list('shoptpl').length) C.SHOP_TEMPLATES.forEach((t, i) => changes.push({ kind: 'shoptpl', data: { id: 'tpl-s-' + t.id, emoji: t.emoji, name: t.name, items: t.items, order: i } }));

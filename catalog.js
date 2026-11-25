@@ -313,5 +313,5 @@
     { id: 'bebidas', name: 'Bebidas', emoji: '🧃', items: [['p-agua', 9000], ['p-cerveza', 12], ['p-refresco', 2000], ['p-zumo', 1000]] }
   ];
 
-  window.CATALOG = { SECTIONS, STORES, PRODUCTS, RECIPES, MEALS, MENU_TEMPLATES, SHOP_TEMPLATES, ESSENTIALS, VERSION: 5 };
+  window.CATALOG = { SECTIONS, STORES, PRODUCTS, RECIPES, MEALS, MENU_TEMPLATES, SHOP_TEMPLATES, ESSENTIALS, VERSION: 6 };
 })();

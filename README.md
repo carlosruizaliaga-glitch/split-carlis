@@ -40,3 +40,10 @@ El plan gratuito de Supabase pausa el proyecto si pasa 1 semana sin ningún uso.
 - **Productos** (Compra → Productos): catálogo completo con buscador, 🛒 para añadir a la lista, elegir varios (mover de sección, esenciales, borrar), duplicar, recetas que lo usan y lo que hay en casa.
 - **Ajustes**: esenciales, secciones del súper (orden de la lista), plantillas de la lista y del menú (también «Guardar como plantilla» desde la lista y la semana).
 - Datos nuevos en `sc_items`: `stock`, `section`, `shoptpl`, `menutpl`.
+
+## Tareas del hogar (mod-chores.js)
+- **Tareas** con emoji, puntos de esfuerzo (1-10), frecuencia (diaria, días concretos, semanal, cada N semanas, mensual), quién puede hacerlas y pausa.
+- **Semana**: se generan solas desde hoy y se reparten equilibrando puntos según el reparto (% por persona, como los gastos) y rotando para no repetir la misma tarea. Todo editable: persona (toque en el avatar), día, saltar, hecha / la hizo otro. «Repartir de nuevo» lo pendiente.
+- **Conexión**: «Cocinar» = cada comida del menú (comida y cena por defecto); se marca con «Ya la hicimos» y se ve quién cocina en el menú e Inicio. «Hacer la compra» se marca sola al terminar la compra (la hace quien paga).
+- **Ranking** (semana, mes, siempre), 20 logros con progreso, premios editables (ganar la semana, ganar el mes o cada X puntos) con «Disfrutado».
+- Ajustes se abre con el ⚙️ de la cabecera. Datos nuevos en `sc_items`: `chore`, `chorewk`, `reward`.

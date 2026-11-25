@@ -51,7 +51,11 @@
     const total = items.reduce((a, i) => a + (itemCost(i, pById, store) || 0), 0);
     const inCart = checked.reduce((a, i) => a + (itemCost(i, pById, store) || 0), 0);
 
-    let h = `<div class="card">
+    const so = App.modules.chores && App.modules.chores.shopOccThisWeek();
+    let h = `${so ? `<div class="alert ${so.doneAt ? 'ok' : ''} tap" id="shopTask" style="margin-top:4px">${App.avatar(App.person(so.doneAt ? so.doneBy || so.who : so.who), 1)}
+        <div class="grow">${so.doneAt ? `<b>Compra de la semana hecha</b> por ${esc(App.person(so.doneBy || so.who).name)}` : `La compra de esta semana le toca a <b>${esc(App.person(so.who).name)}</b>`}
+        <div class="muted">Tarea del hogar · +${so.w || 1} pts · se marca sola al terminar la compra</div></div><span class="muted">›</span></div>` : ''}
+    <div class="card">
       <div class="section-label" style="margin-top:0">Comprando en</div>
       <div class="chips scroll-x">${App.stores().map(s => `<button data-store="${s.id}" class="${store && s.id === store.id ? 'on' : ''}">${App.storeDot(s)} ${esc(s.name)}</button>`).join('')}</div>
       <div class="row" style="margin-top:10px"><div class="grow"><b>${checked.length}/${items.length}</b> en el carro</div>
@@ -111,6 +115,7 @@
     if ($('#fromMenu')) $('#fromMenu').onclick = () => App.go('menu', 'week');
     if ($('#fromRecipes')) $('#fromRecipes').onclick = () => App.modules.recipes.startPicking();
     if ($('#repeat')) $('#repeat').onclick = openRepeat;
+    if ($('#shopTask')) $('#shopTask').onclick = () => App.modules.chores.openOcc(so);
     if ($('#saveTpl')) $('#saveTpl').onclick = () => App.edit.saveListAsTemplate();
     if ($('#tplToggle')) $('#tplToggle').onclick = () => { tplOpen = !tplOpen; App.render(); };
     view.querySelectorAll('[data-chk]').forEach(b => b.onclick = () => {
@@ -424,6 +429,7 @@
       checked.forEach(i => changes.push({ kind: 'shopitem', data: i, deleted: true }));
       S.putMany(changes);
       App.setCurrentStore(store.id);
+      if (App.modules.chores) App.modules.chores.shopDone(paidBy, date); // tarea «Hacer la compra» hecha
       App.closeSheet();
       const sv = purchase.saving;
       App.toast(sv > 0.5 ? `Compra guardada y a la despensa. Ahorráis ${euros(sv)} frente a la media 🎉` : 'Compra guardada y a la despensa');

@@ -1,7 +1,7 @@
 // Service worker: guarda la app en caché para que funcione sin conexión.
 // Al cambiar la app, sube CACHE y el ?v= de los scripts en index.html.
-const CACHE = 'split-carlis-v13';
-const FILES = ['./', 'index.html', 'app.js', 'core.js', 'look.js', 'mod-home.js', 'logic.js', 'shoplogic.js', 'store.js', 'defaults.js', 'catalog.js', 'mod-split.js', 'mod-menu.js', 'mod-shop.js', 'mod-pantry.js', 'mod-edit.js', 'mod-settings.js', 'manifest.webmanifest', 'favicon.png', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'cats-wide.jpg'];
+const CACHE = 'split-carlis-v14';
+const FILES = ['./', 'index.html', 'app.js', 'core.js', 'look.js', 'mod-home.js', 'logic.js', 'shoplogic.js', 'store.js', 'defaults.js', 'catalog.js', 'mod-split.js', 'mod-menu.js', 'mod-shop.js', 'mod-pantry.js', 'mod-chores.js', 'mod-edit.js', 'mod-settings.js', 'manifest.webmanifest', 'favicon.png', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'cats-wide.jpg'];
 
 self.addEventListener('install', e => {
   // cache: 'reload' → baja los archivos del servidor, nunca de la caché del navegador.

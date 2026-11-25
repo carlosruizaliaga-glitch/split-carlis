@@ -80,7 +80,11 @@
         const serv = (slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '')
           + (slot && slot.doneAt ? ' <span class="pill pos">✓</span>' : '') + (slot && slot.skip ? ' <span class="pill zero">no se hizo</span>' : '');
         h += `<div class="slot tap" data-slot="${d}|${meal.id}"><span class="slotmeal">${meal.emoji} ${esc(meal.name)}</span>
-          <span class="grow slotval ${label ? '' : 'empty'}">${label || '＋ Añadir'}${serv}</span></div>`;
+          <span class="grow slotval ${label ? '' : 'empty'}">${label || '＋ Añadir'}${serv}</span>${(() => {
+            // Quién cocina (tarea del módulo Tareas).
+            const co = slot && App.modules.chores && App.modules.chores.cookOf(slot.id);
+            return co ? `<span class="cookav" title="Cocina ${esc(App.person(co.who).name)}">${App.avatar(App.person(co.who), 1)}</span>` : '';
+          })()}</div>`;
       });
       h += `</div>`;
     });
@@ -174,9 +178,11 @@
     let servings = slot ? slot.servings || 2 : App.defaultServings();
     let showAll = false, q = '';
     const di = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
+    const cookOcc = slot && App.modules.chores ? App.modules.chores.cookOf(slot.id) : null;
     const m = App.sheet(`<h3>${DAY_NAMES[di]} · ${esc(mdef.emoji)} ${esc(mdef.name)}</h3>
       <div class="row" style="margin-top:8px"><span class="grow muted">Personas que comen</span>
         <button class="qbtn" id="sMinus">−</button><b id="sVal" class="qval"></b><button class="qbtn" id="sPlus">+</button></div>
+      ${cookOcc ? `<div class="row" style="margin-top:8px"><span class="grow muted">👨‍🍳 Cocina</span><div class="seg" style="flex:none">${App.people().map(p => `<button data-cook="${p.id}" class="${p.id === cookOcc.who ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div></div>` : ''}
       <div class="sheethead" style="margin-top:2px"><input id="q" class="search" type="search" enterkeyhint="done" placeholder="🔍 Buscar receta" autocomplete="off"></div>
       <div class="chips" style="margin-top:8px">${['Fuera de casa', 'Sobras', 'Libre'].map(t => `<button data-text="${t}">${t}</button>`).join('')}</div>
       <div class="list" id="rlist" style="margin-top:6px"></div>
@@ -206,6 +212,10 @@
     $('#sMinus').onclick = () => { servings = Math.max(1, servings - 1); sv(); if (slot) S.put('meal', Object.assign({}, slot, { servings })); };
     $('#sPlus').onclick = () => { servings = Math.min(20, servings + 1); sv(); if (slot) S.put('meal', Object.assign({}, slot, { servings })); };
     $('#q').oninput = ev => { q = ev.target.value; list(); };
+    m.querySelectorAll('[data-cook]').forEach(b => b.onclick = () => {
+      S.put('chorewk', Object.assign({}, S.get(cookOcc.id) || cookOcc, { who: b.dataset.cook }));
+      m.querySelectorAll('[data-cook]').forEach(x => x.classList.toggle('on', x === b));
+    });
     m.querySelectorAll('[data-text]').forEach(b => b.onclick = () => save(null, b.dataset.text));
     $('#useFree').onclick = () => { const t = $('#free').value.trim(); if (t) save(null, t); };
     $('#cancel').onclick = App.closeSheet;
@@ -214,11 +224,13 @@
     if ($('#done')) $('#done').onclick = () => {
       const cur = S.get(slot.id) || slot;
       S.put('meal', Object.assign({}, cur, { doneAt: cur.doneAt ? null : Date.now(), skip: false }));
+      if (App.modules.chores) App.modules.chores.mealDone(cur, !cur.doneAt); // también la tarea «Cocinar»
       App.closeSheet(); App.toast(cur.doneAt ? 'Se descontará al acabar el día' : 'Hecha: descontada de la despensa');
     };
     if ($('#skip')) $('#skip').onclick = () => {
       const cur = S.get(slot.id) || slot;
       S.put('meal', Object.assign({}, cur, { skip: !cur.skip, doneAt: null }));
+      if (cookOcc) S.put('chorewk', Object.assign({}, S.get(cookOcc.id) || cookOcc, { skip: !cur.skip, doneAt: null, doneBy: null }));
       App.closeSheet(); App.toast(cur.skip ? 'Se descontará al acabar el día' : 'No se descontará de la despensa');
     };
     sv(); list();

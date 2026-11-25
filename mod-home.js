@@ -18,7 +18,7 @@
       const label = r ? `${esc(r.emoji)} ${esc(r.name)}` : slot && slot.text ? `📝 ${esc(slot.text)}` : '';
       const serv = slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '';
       return `<div class="mealrow" data-slot="${date}|${meal.id}"><span class="when">${meal.emoji} ${esc(meal.name)}</span>
-        <span class="grow what ${label ? '' : 'none'}">${label || '＋ Elegir'}${serv}</span>${rn && rn.kcal ? `<span class="muted">${App.fmtN(rn.kcal, 'kcal')} kcal</span>` : ''}${r ? '<span class="muted">›</span>' : ''}</div>`;
+        <span class="grow what ${label ? '' : 'none'}">${label || '＋ Elegir'}${serv}</span>${rn && rn.kcal ? `<span class="muted">${App.fmtN(rn.kcal, 'kcal')} kcal</span>` : ''}${(() => { const co = slot && App.modules.chores && App.modules.chores.cookOf(slot.id); return co ? `<span class="cookav">${App.avatar(App.person(co.who), 1)}</span>` : ''; })()}${r ? '<span class="muted">›</span>' : ''}</div>`;
     }).join('');
     const tot = day.kcal ? `<div class="muted" style="margin-top:6px">Por persona: <b>${App.fmtN(day.kcal, 'kcal')} kcal</b> · ${App.fmtN(day.p)} g proteínas · ${App.fmtN(day.hc)} g hidratos · ${App.fmtN(day.g)} g grasas</div>` : '';
     return `<div class="card"><div class="hhead"><span class="grow">${title}</span><button class="small ghost" data-go="menu">Ver semana ›</button></div>${rows}${tot}</div>`;
@@ -39,6 +39,7 @@
     // ---- Comidas de hoy y mañana ----
     h += dayCard(today, `☀️ Hoy · ${DAY_NAMES[(d.getDay() + 6) % 7]}`);
     h += dayCard(tomorrow, `🌙 Mañana · ${DAY_NAMES[(d.getDay() + 7) % 7]}`);
+    if (App.modules.chores) h += App.modules.chores.homeCard();
 
     // ---- Semana: huecos que quedan desde hoy hasta el domingo ----
     const sunday = App.addDays(App.mondayOf(today), 6);
@@ -92,7 +93,8 @@
 
   function bind(missing, due, upcoming) {
     const view = App.view;
-    view.querySelectorAll('[data-go]').forEach(el => el.onclick = ev => { ev.stopPropagation(); App.go(el.dataset.go, el.dataset.go === 'shop' ? 'list' : null); });
+    view.querySelectorAll('[data-go]').forEach(el => el.onclick = ev => { ev.stopPropagation(); App.go(el.dataset.go, ({ shop: 'list', chores: 'week' })[el.dataset.go] || null); });
+    if (App.modules.chores) App.modules.chores.bindRows(view);
     view.querySelectorAll('[data-slot]').forEach(el => el.onclick = () => {
       const [d, m] = el.dataset.slot.split('|');
       const slot = S.get(App.modules.menu.mealId(d, m));
