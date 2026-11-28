@@ -47,3 +47,12 @@ El plan gratuito de Supabase pausa el proyecto si pasa 1 semana sin ningún uso.
 - **Conexión**: «Cocinar» = cada comida del menú (comida y cena por defecto); se marca con «Ya la hicimos» y se ve quién cocina en el menú e Inicio. «Hacer la compra» se marca sola al terminar la compra (la hace quien paga).
 - **Ranking** (semana, mes, siempre), 20 logros con progreso, premios editables (ganar la semana, ganar el mes o cada X puntos) con «Disfrutado».
 - Ajustes se abre con el ⚙️ de la cabecera. Datos nuevos en `sc_items`: `chore`, `chorewk`, `reward`.
+
+## Automatismos y atajos (mod-auto.js y mejoras)
+- **Gasto del súper apuntado a mano** → pregunta «¿Era la compra de la lista?»: lo marcado entra en la despensa, sale de la lista, la compra queda ligada al gasto y cuenta como la tarea «Hacer la compra». En la lista: «He hecho la compra (toda la lista)» y aviso de productos con más de 2 semanas.
+- **Gastos rápidos** (Inicio y Saldo) con lo que más repetís; **gastos fijos** mensuales (Ajustes o «Repetir cada mes» al crear un gasto; id `rec-<id>-<mes>` para no duplicar); **Resumen** compara con el mes anterior.
+- **Menú**: «✨ Sugerir la semana» con vista previa (favoritas ⭐ y lo que hay en la despensa salen más); Inicio propone planificar si no hay menú.
+- **Tareas**: deslizar para marcar, «Hechas todas las mías de hoy», resumen de la semana pasada (lunes a miércoles) y cálculos del ranking en memoria.
+- **Recordatorios** (Ajustes): avisos de tareas pendientes desde la hora elegida y resumen del lunes, vía sincronización periódica del service worker (hora aproximada; sin servidor de avisos).
+- **Copias automáticas** semanales en el móvil (Cache Storage, 6 últimas) con descargar/restaurar.
+- Compra → **Análisis** reúne Comparar y Ahorro.

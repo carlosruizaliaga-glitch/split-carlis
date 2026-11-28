@@ -38,6 +38,7 @@
         ${item('people', '👥', 'Personas', ps.map(p => esc(p.name)).join(' y '))}
         ${item('groups', '🗂️', 'Grupos y categorías', `${App.groups().length} grupos · ${App.categories().length} categorías`)}
         ${item('money', '💱', 'Monedas', `${Object.keys(App.rates()).length} monedas con su cambio a euros`)}
+        ${item('recurring', '🔁', 'Gastos fijos', `${(App.settings().recurring || []).length} gastos que se apuntan solos cada mes`)}
       </div>
       <h2>Comida y compra</h2><div class="mlist">
         ${item('stores', '🛒', 'Supermercados', `${App.stores().length} súpers${habitual ? ' · habitual ' + esc(habitual.name) : ''}`)}
@@ -51,8 +52,10 @@
       </div>
       <h2>La app</h2><div class="mlist">
         ${item('look', '🎨', 'Apariencia', `${THEME_NAMES[look.theme] || 'Automático'} · ${esc(acc[1])} · letra ${(SIZE_NAMES[look.size] || 'Normal').toLowerCase()}`)}
+        ${item('reminders', '🔔', 'Recordatorios', App.auto && App.auto.remCfg().on ? `Activados · a partir de las ${App.auto.remCfg().hour}:00` : 'Avisos de tareas pendientes y resumen semanal')}
         ${item('sync', '🔄', 'Sincronización', `${syncTxt} · actualizar la app y sesión`)}
         ${item('data', '💾', 'Copia de seguridad', 'Exportar, Excel e importar')}
+        ${item('backups', '🗂️', 'Copias automáticas', 'Una por semana en este móvil (las 6 últimas)')}
       </div>
       <div class="muted center" style="margin-top:18px">Split Carlis · con la supervisión de Monchi y Hierba 🐱🐈‍⬛</div>`;
   }

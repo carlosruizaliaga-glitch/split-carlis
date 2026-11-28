@@ -34,11 +34,20 @@
 
     let h = `<div class="hello"><b>${hi}${me ? ', ' + esc(me.name) : ''}</b><div class="muted">${esc(dateTxt[0].toUpperCase() + dateTxt.slice(1))} · Monchi y Hierba vigilan 🐱🐈‍⬛</div></div>
       <div class="quick"><button data-q="exp"><span>💶</span>Gasto</button><button data-q="add"><span>🛒</span>A la lista</button>
-        <button data-go="recipes"><span>🍳</span>Recetas</button><button data-go="menu"><span>📅</span>Menú</button></div>`;
+        <button data-go="recipes"><span>🍳</span>Recetas</button><button data-go="menu"><span>📅</span>Menú</button></div>
+      ${App.modules.split.quickHtml()}`;
 
     // ---- Comidas de hoy y mañana ----
-    h += dayCard(today, `☀️ Hoy · ${DAY_NAMES[(d.getDay() + 6) % 7]}`);
-    h += dayCard(tomorrow, `🌙 Mañana · ${DAY_NAMES[(d.getDay() + 7) % 7]}`);
+    // Si no hay nada planificado hoy ni mañana, en vez de 8 huecos vacíos, una tarjeta para planificar.
+    const planned = App.meals().some(m => (m.date === today || m.date === tomorrow) && (m.recipe || m.text));
+    if (planned) {
+      h += dayCard(today, `☀️ Hoy · ${DAY_NAMES[(d.getDay() + 6) % 7]}`);
+      h += dayCard(tomorrow, `🌙 Mañana · ${DAY_NAMES[(d.getDay() + 7) % 7]}`);
+    } else {
+      h += `<div class="card"><div class="row"><div class="emoji" style="font-size:30px">🍽️</div><div class="grow"><b>Sin menú para hoy ni mañana</b>
+        <div class="muted">En un minuto: la app propone la semana y vosotros cambiáis lo que no apetezca.</div></div></div>
+        <div class="btnrow"><button class="primary" id="sugWeek">✨ Sugerir la semana</button><button data-go="menu">📅 Ver menú</button></div></div>`;
+    }
     if (App.modules.chores) h += App.modules.chores.homeCard();
 
     // ---- Semana: huecos que quedan desde hoy hasta el domingo ----
@@ -93,8 +102,11 @@
 
   function bind(missing, due, upcoming) {
     const view = App.view;
-    view.querySelectorAll('[data-go]').forEach(el => el.onclick = ev => { ev.stopPropagation(); App.go(el.dataset.go, ({ shop: 'list', chores: 'week' })[el.dataset.go] || null); });
-    if (App.modules.chores) App.modules.chores.bindRows(view);
+    view.querySelectorAll('[data-go]').forEach(el => el.onclick = ev => { ev.stopPropagation(); const [gm, gs] = el.dataset.go.split('/'); App.go(gm, gs || ({ shop: 'list', chores: 'week' })[gm] || null); });
+    if (App.modules.chores) App.modules.chores.bindHome(view);
+    App.modules.split.bindQuick(view);
+    const sw = view.querySelector('#sugWeek');
+    if (sw) sw.onclick = () => App.modules.menu.openSuggest(App.mondayOf(App.today()));
     view.querySelectorAll('[data-slot]').forEach(el => el.onclick = () => {
       const [d, m] = el.dataset.slot.split('|');
       const slot = S.get(App.modules.menu.mealId(d, m));

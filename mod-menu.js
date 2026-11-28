@@ -61,10 +61,10 @@
         <div class="row"><div class="grow"><b>${planned.length}/${totalSlots}</b> comidas planificadas</div>
         ${estimate ? `<div class="muted">≈ ${App.euros(estimate)} en comida</div>` : ''}</div>
         <div class="bar"><span style="width:${totalSlots ? planned.length / totalSlots * 100 : 0}%"></span></div>
-        <button class="primary block" id="pickDishes" style="margin-top:12px">🍳 Planificar eligiendo recetas</button>
+        <div class="btnrow" style="margin-top:12px"><button class="primary" id="suggest">✨ Sugerir la semana</button><button id="pickDishes">🍳 Elegir recetas</button></div>
         <div class="section-label">Plantillas</div>
         <div class="chips">${App.menuTemplates().map(t => `<button data-tpl="${t.id}">+ ${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
-        <div class="btnrow"><button class="ghost" id="fillRandom">🎲 Sugerir huecos</button><button class="ghost" id="copyPrev">⎘ Copiar semana anterior</button></div>
+        <div class="btnrow"><button class="ghost" id="copyPrev">⎘ Copiar semana anterior</button></div>
         ${planned.length ? '<button class="ghost block small" id="saveWeekTpl">💾 Guardar esta semana como plantilla</button>' : ''}
         ${planned.length ? `<button class="block" id="toList" style="margin-top:10px">🛒 Crear lista de la compra desde el menú</button>` : ''}
       </div>`;
@@ -80,7 +80,7 @@
         const serv = (slot && (slot.servings || 2) !== App.defaultServings() ? ` <span class="pill zero">${slot.servings} pers.</span>` : '')
           + (slot && slot.doneAt ? ' <span class="pill pos">✓</span>' : '') + (slot && slot.skip ? ' <span class="pill zero">no se hizo</span>' : '');
         h += `<div class="slot tap" data-slot="${d}|${meal.id}"><span class="slotmeal">${meal.emoji} ${esc(meal.name)}</span>
-          <span class="grow slotval ${label ? '' : 'empty'}">${label || '＋ Añadir'}${serv}</span>${(() => {
+          <span class="grow slotval ${label ? '' : 'none'}">${label || '＋ Añadir'}${serv}</span>${(() => {
             // Quién cocina (tarea del módulo Tareas).
             const co = slot && App.modules.chores && App.modules.chores.cookOf(slot.id);
             return co ? `<span class="cookav" title="Cocina ${esc(App.person(co.who).name)}">${App.avatar(App.person(co.who), 1)}</span>` : '';
@@ -95,7 +95,7 @@
     $('#nextW').onclick = () => { week = App.addDays(week, 7); App.render(); };
     if ($('#thisW')) $('#thisW').onclick = () => { week = App.mondayOf(today); App.render(); };
     view.querySelectorAll('[data-tpl]').forEach(b => b.onclick = () => applyTemplate(App.menuTemplates().find(t => t.id === b.dataset.tpl)));
-    $('#fillRandom').onclick = fillRandom;
+    $('#suggest').onclick = () => openSuggest();
     $('#copyPrev').onclick = copyPrevWeek;
     if ($('#saveWeekTpl')) $('#saveWeekTpl').onclick = () => {
       const plan = {};
@@ -132,23 +132,68 @@
     App.toast(changes.length ? `Añadidas ${changes.length} comidas` : 'No había huecos que rellenar');
   }
 
-  function fillRandom() {
-    const dates = weekDates(week), recipes = App.recipes();
-    const used = new Set(weekMeals(week).map(m => m.recipe).filter(Boolean));
-    const changes = [];
-    dates.forEach(d => App.enabledMeals().forEach(meal => {
-      if (S.get(mealId(d, meal.id))) return;
-      const fit = recipes.filter(r => (r.meals || []).includes(meal.id));
-      if (!fit.length) return;
-      // Evita repetir en la semana (salvo desayunos, que se repiten a gusto).
-      let pool = meal.id === 'desayuno' ? fit : fit.filter(r => !used.has(r.id));
-      if (!pool.length) pool = fit;
-      const r = pool[Math.floor(Math.random() * pool.length)];
-      used.add(r.id);
-      changes.push({ kind: 'meal', data: newMeal(d, meal.id, r.id) });
-    }));
-    S.putMany(changes);
-    App.toast(changes.length ? `Sugeridas ${changes.length} comidas. Toca una para cambiarla.` : 'No había huecos que rellenar');
+  // Sugerir la semana: rellena los huecos libres (de hoy en adelante) eligiendo recetas al azar pero con cabeza:
+  // más probables las ⭐ favoritas y las que se pueden hacer con lo que hay en la despensa, menos las de los últimos 14 días,
+  // y sin repetir en la semana (salvo desayunos). Se ve antes de aceptar y cada una se puede cambiar.
+  function suggestCtx() {
+    const today = App.today(), since = App.addDays(today, -14);
+    return { pan: App.pantry(), pById: App.productsById(), recent: new Set(App.meals().filter(m => m.date >= since && m.date < today && m.recipe).map(m => m.recipe)) };
+  }
+  function coverage(r, ctx) {
+    const ings = (r.ingredients || []).filter(i => ctx.pById[i.product] && !ctx.pById[i.product].staple);
+    if (!ings.length) return 0;
+    return ings.filter(i => ctx.pan[i.product] && ctx.pan[i.product].qty >= i.qty * App.defaultServings()).length / ings.length;
+  }
+  function pickRecipe(meal, used, ctx, exclude) {
+    const fit = App.recipes().filter(r => (r.meals || []).includes(meal) && r.id !== exclude);
+    let pool = meal === 'desayuno' ? fit : fit.filter(r => !used.has(r.id));
+    if (!pool.length) pool = fit;
+    if (!pool.length) return null;
+    const w = pool.map(r => (r.fav ? 3 : 1) * (1 + 2 * coverage(r, ctx)) * (ctx.recent.has(r.id) ? 0.4 : 1));
+    let x = Math.random() * w.reduce((a, v) => a + v, 0);
+    for (let i = 0; i < pool.length; i++) { x -= w[i]; if (x <= 0) return pool[i]; }
+    return pool[pool.length - 1];
+  }
+  function openSuggest(targetWeek) {
+    const w = targetWeek || week, today = App.today(), ctx = suggestCtx();
+    const slots = [];
+    weekDates(w).forEach((d, i) => { if (d >= today) App.enabledMeals().forEach(meal => { if (!S.get(mealId(d, meal.id))) slots.push({ d, i, meal }); }); });
+    if (!slots.length) { App.toast('No quedan huecos libres en esta semana'); return; }
+    const used = new Set(weekMeals(w).map(m => m.recipe).filter(Boolean));
+    slots.forEach(sl => { const r = pickRecipe(sl.meal.id, used, ctx); sl.r = r && r.id; if (r) used.add(r.id); });
+    const m = App.sheet(`<h3>✨ Sugerencia para la semana</h3>
+      <div class="muted">⭐ Favoritas y lo que se puede hacer con la despensa salen más. 🔁 cambia una, ✕ la deja libre.</div>
+      <div class="list tight" id="sug" style="margin-top:8px"></div>
+      <div class="actions"><button id="cancel">Cancelar</button><button id="again">🎲 Otra vez</button><button class="primary" id="ok">Añadir</button></div>`);
+    const $ = x => m.querySelector(x);
+    function draw() {
+      const rById = App.recipesById();
+      let lastD = null;
+      $('#sug').innerHTML = slots.map((sl, k) => {
+        const r = sl.r && rById[sl.r];
+        const hdr = sl.d !== lastD ? `<div class="sechdr">${DAY_NAMES[sl.i]} <span class="muted">${esc(fmtShort(sl.d))}</span></div>` : '';
+        lastD = sl.d;
+        return hdr + `<div class="item"><span class="slotmeal">${sl.meal.emoji} ${esc(sl.meal.name)}</span>
+          <div class="grow ellipsis ${r ? '' : 'muted'}">${r ? `${esc(r.emoji)} ${esc(r.name)}${r.fav ? ' ⭐' : ''}${coverage(r, ctx) >= 0.99 ? ' <span class="badge real">en casa</span>' : ''}` : '— libre —'}</div>
+          <button class="qbtn" data-re="${k}" aria-label="Otra">🔁</button><button class="xbtn" data-rx="${k}" aria-label="Dejar libre">✕</button></div>`;
+      }).join('');
+      m.querySelectorAll('[data-re]').forEach(bt => bt.onclick = () => {
+        const sl = slots[+bt.dataset.re], u = new Set(slots.map(x => x.r).filter(Boolean));
+        const r = pickRecipe(sl.meal.id, u, ctx, sl.r); sl.r = r ? r.id : sl.r; draw();
+      });
+      m.querySelectorAll('[data-rx]').forEach(bt => bt.onclick = () => { slots[+bt.dataset.rx].r = null; draw(); });
+      const n = slots.filter(x => x.r).length;
+      $('#ok').textContent = `Añadir ${n}`; $('#ok').disabled = !n;
+    }
+    $('#cancel').onclick = App.closeSheet;
+    $('#again').onclick = () => { const u = new Set(weekMeals(w).map(x => x.recipe).filter(Boolean)); slots.forEach(sl => { const r = pickRecipe(sl.meal.id, u, ctx); sl.r = r && r.id; if (r) u.add(r.id); }); draw(); };
+    $('#ok').onclick = () => {
+      const ch = slots.filter(x => x.r).map(x => ({ kind: 'meal', data: newMeal(x.d, x.meal.id, x.r) }));
+      S.putMany(ch); week = w; App.closeSheet();
+      App.toast(`✨ ${ch.length} comidas al menú. Toca una para cambiarla.`);
+      if (App.nav.mod !== 'menu') App.go('menu');
+    };
+    draw();
   }
 
   function copyPrevWeek() {
@@ -335,10 +380,11 @@
   function renderRecipes(partial) {
     const view = App.view, store = App.habitualStore(), pById = App.productsById();
     const ql = recipeQuery.trim().toLowerCase();
-    const rs = App.recipes().filter(r => (!ql || r.name.toLowerCase().includes(ql)) && (!recipeMeal || (r.meals || []).includes(recipeMeal)));
+    const rs = App.recipes().filter(r => (!ql || r.name.toLowerCase().includes(ql)) && (!recipeMeal || (recipeMeal === 'fav' ? r.fav : (r.meals || []).includes(recipeMeal))))
+      .sort((a, b) => (!!b.fav - !!a.fav) || a.name.localeCompare(b.name, 'es'));
     const nSel = Object.keys(selected).filter(id => S.get(id)).length;
     let h = `<input id="rq" placeholder="🔍 Buscar receta" value="${esc(recipeQuery)}">
-      <div class="chips scroll-x" style="margin-top:8px"><button data-rm="" class="${!recipeMeal ? 'on' : ''}">Todas</button>
+      <div class="chips scroll-x" style="margin-top:8px"><button data-rm="" class="${!recipeMeal ? 'on' : ''}">Todas</button><button data-rm="fav" class="${recipeMeal === 'fav' ? 'on' : ''}">⭐ Favoritas</button>
       ${C.MEALS.map(x => `<button data-rm="${x.id}" class="${recipeMeal === x.id ? 'on' : ''}">${x.emoji} ${x.name}</button>`).join('')}</div>`;
     const head = h; h = '';
     h += selecting
@@ -349,7 +395,7 @@
       const cost = store ? recipeCost(r, store, pById) : 0;
       const on = !!selected[r.id];
       return `<div class="item tap${on ? ' selected' : ''}" data-r="${r.id}">${selecting ? `<span class="chk${on ? ' on' : ''}">${on ? '✓' : ''}</span>` : ''}
-        <div class="emoji">${esc(r.emoji)}</div><div class="grow"><div class="ellipsis"><b>${esc(r.name)}</b></div>
+        <div class="emoji">${esc(r.emoji)}</div><div class="grow"><div class="ellipsis"><b>${esc(r.name)}</b>${r.fav ? ' ⭐' : ''}</div>
         <div class="muted ellipsis">${(r.meals || []).map(x => App.mealDef(x).name).join(' · ')} · ${(r.ingredients || []).length} ingredientes${(() => { const k = nutOf(r, pById).nut.kcal; return k ? ` · <b>${App.fmtN(k, 'kcal')} kcal</b>` : ''; })()}</div></div>
         <div class="amount">${cost ? App.euros(cost) : ''}<div class="muted">${cost ? '/persona' : ''}</div></div></div>`;
     }).join('')}</div>` : `<div class="card empty">No hay recetas${ql || recipeMeal ? ' con estos filtros' : ''}. Pulsa <b>+</b> para crear una.</div>`;
@@ -553,7 +599,8 @@
     let servings = startServings || App.defaultServings();
     const store = App.habitualStore();
     const m = App.sheet(`<div class="row"><div class="emoji" style="font-size:34px">${esc(r.emoji)}</div>
-        <div class="grow"><h3 style="margin:0">${esc(r.name)}</h3><div class="muted">${(r.meals || []).map(x => App.mealDef(x).emoji + ' ' + App.mealDef(x).name).join(' · ')}</div></div></div>
+        <div class="grow"><h3 style="margin:0">${esc(r.name)}</h3><div class="muted">${(r.meals || []).map(x => App.mealDef(x).emoji + ' ' + App.mealDef(x).name).join(' · ')}</div></div>
+        <button class="icon fav${r.fav ? ' on' : ''}" id="fav" aria-label="Favorita">${r.fav ? '⭐' : '☆'}</button></div>
       <div class="row" style="margin-top:12px"><span class="grow muted">Personas</span>
         <button class="qbtn" id="sMinus">−</button><b id="sVal" class="qval"></b><button class="qbtn" id="sPlus">+</button></div>
       <div class="section-label">Ingredientes</div><div class="list tight" id="ings"></div>
@@ -580,11 +627,17 @@
     $('#toMenu').onclick = () => openAddToMenu(r, servings);
     $('#toList').onclick = () => openNeedsToList({ title: `🛒 ${r.name} a la lista`, stack: true, getMeals: () => [{ recipe: r.id, servings }] });
     $('#edit').onclick = () => openRecipe(S.get(r.id) || r);
+    $('#fav').onclick = () => {
+      const cur = S.get(r.id) || r, fav = !cur.fav;
+      S.put('recipe', Object.assign({}, cur, { fav })); r.fav = fav;
+      $('#fav').textContent = fav ? '⭐' : '☆'; $('#fav').classList.toggle('on', fav);
+      App.toast(fav ? '⭐ Favorita: saldrá más en las sugerencias' : 'Ya no es favorita');
+    };
     if (slotRef) $('#swap').onclick = () => openSlot(slotRef[0], slotRef[1]);
     $('#cancel').onclick = App.closeSheet;
     draw();
   }
 
-  App.modules.menu = { render, openRecipe, openSlot, openNeedsToList, openRecipeCard, recipeCost, mealId };
+  App.modules.menu = { render, openRecipe, openSuggest, openSlot, openNeedsToList, openRecipeCard, recipeCost, mealId };
   App.modules.recipes = { render: renderRecipesModule, openRecipe, startPicking };
 })();

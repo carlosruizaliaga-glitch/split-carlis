@@ -7,7 +7,15 @@
   let addQuery = '', tplOpen = false, essOpen = false;
   let pSel = null; // productos elegidos en «Elegir varios» (Set) o null
 
+  let anaTab = 'compare';
   function render(sub) {
+    if (sub === 'analysis') {
+      if (anaTab === 'savings') renderSavings(); else renderCompare();
+      App.view.insertAdjacentHTML('afterbegin', `<div class="seg" style="margin-bottom:10px">${[['compare', '⚖️ Comparar súpers'], ['savings', '💰 Ahorro']]
+        .map(([k, t]) => `<button data-ana="${k}" class="${anaTab === k ? 'on' : ''}">${t}</button>`).join('')}</div>`);
+      App.view.querySelectorAll('[data-ana]').forEach(b => b.onclick = () => { anaTab = b.dataset.ana; App.render(); });
+      return;
+    }
     if (sub === 'compare') renderCompare();
     else if (sub === 'prices') { App.fabAction = pSel ? null : () => openProduct(); renderPrices(); }
     else if (sub === 'pantry') { App.fabAction = () => App.pickProduct(p => App.modules.pantry.openStock(p)); App.modules.pantry.render(); }
@@ -106,6 +114,11 @@
       h += `</div>`;
       h += listNutCard(items, pById);
       if (checked.length) h += `<button class="primary block big-btn" id="finish">✅ Terminar compra · ${checked.length} producto${checked.length === 1 ? '' : 's'} · ${euros(inCart)}</button>`;
+      else h += `<button class="block big-btn" id="finishAll">✅ He hecho la compra (toda la lista)</button>
+        <div class="muted center" style="margin-top:4px;font-size:12px">O ve marcando ☐ lo que metes en el carro y termina con lo marcado.</div>`;
+      // Productos olvidados: más de 2 semanas en la lista sin comprar.
+      const stale = items.filter(i => !i.checked && i.addedAt && Date.now() - i.addedAt > 14 * 86400000);
+      if (stale.length) h += `<div class="alert" id="stale" style="margin-top:12px"><div class="emoji">🕸️</div><div class="grow"><b>${stale.length} producto${stale.length === 1 ? '' : 's'} llevan más de 2 semanas</b><div class="muted">¿Siguen haciendo falta?</div></div><button class="small">Revisar</button></div>`;
       h += `<div class="btnrow"><button class="ghost small" id="uncheck">Desmarcar todo</button><button class="danger small" id="clearList">Vaciar lista</button></div>`;
     }
     view.innerHTML = h;
@@ -125,7 +138,9 @@
     view.querySelectorAll('[data-minus]').forEach(b => b.onclick = () => changeQty(S.get(b.dataset.minus), -1));
     view.querySelectorAll('[data-plus]').forEach(b => b.onclick = () => changeQty(S.get(b.dataset.plus), +1));
     view.querySelectorAll('[data-del]').forEach(b => b.onclick = () => removeItem(S.get(b.dataset.del)));
-    if ($('#finish')) $('#finish').onclick = openFinish;
+    if ($('#finish')) $('#finish').onclick = () => openFinish(false);
+    if ($('#finishAll')) $('#finishAll').onclick = () => openFinish(true);
+    if ($('#stale')) $('#stale').onclick = openStale;
     if ($('#uncheck')) $('#uncheck').onclick = () => S.putMany(App.shopItems().filter(i => i.checked).map(i => ({ kind: 'shopitem', data: Object.assign({}, i, { checked: false }) })));
     if ($('#clearList')) $('#clearList').onclick = async () => {
       const all = App.shopItems();
@@ -158,6 +173,26 @@
       const first = box.querySelector('.sitem'); if (first) first.click();
     };
     if (addQuery) { draw(); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+
+  // Revisar lo que lleva mucho en la lista y quitar lo que ya no hace falta.
+  function openStale() {
+    const stale = App.shopItems().filter(i => !i.checked && i.addedAt && Date.now() - i.addedAt > 14 * 86400000);
+    const pick = {}; stale.forEach(i => { pick[i.id] = true; });
+    const m = App.sheet(`<h3>🕸️ Llevan tiempo en la lista</h3><div class="muted">Marca lo que quieres quitar.</div>
+      <div class="list tight" style="margin-top:8px">${stale.map(i => `<label class="item check"><input type="checkbox" data-st="${i.id}" checked><div class="grow"><div class="ellipsis">${esc(i.name)}</div>
+        <div class="muted">desde ${esc(App.fmtDate(new Date(i.addedAt).toISOString().slice(0, 10)))}</div></div></label>`).join('')}</div>
+      <div class="actions"><button id="cancel">Dejarlos</button><button class="danger" id="ok">Quitar marcados</button></div>`);
+    m.querySelectorAll('[data-st]').forEach(cb => cb.onchange = () => { pick[cb.dataset.st] = cb.checked; });
+    m.querySelector('#cancel').onclick = App.closeSheet;
+    m.querySelector('#ok').onclick = () => {
+      const sel = stale.filter(i => pick[i.id]);
+      // Los que se dejan cuentan desde hoy, para no volver a avisar enseguida.
+      S.putMany([...sel.map(i => ({ kind: 'shopitem', data: i, deleted: true })),
+        ...stale.filter(i => !pick[i.id]).map(i => ({ kind: 'shopitem', data: Object.assign({}, i, { addedAt: Date.now() }) }))]);
+      App.closeSheet();
+      if (sel.length) App.toast(`Quitados ${sel.length} productos`, { undo: () => S.putMany(sel.map(i => ({ kind: 'shopitem', data: i }))) });
+    };
   }
 
   function removeItem(it) {
@@ -373,11 +408,77 @@
   }
   App.setPrice = setPrice;
 
+  // Guarda la compra: líneas, ahorro, despensa, quita de la lista y marca la tarea «Hacer la compra».
+  // exp = gasto ya existente (apuntado a mano) o null para crearlo si mkExp.
+  function recordPurchase({ items, store, total, date, paidBy, exp, mkExp }) {
+    const pById = App.productsById(), ps = App.people();
+    const lines = items.map(i => ({ product: i.product || null, name: i.name, section: i.section, amount: i.amount, price: i.price, cost: itemCost(i, pById, store) }));
+    const estTotal = SL.round2(items.reduce((a, i) => a + (itemCost(i, pById, store) || 0), 0));
+    const ref = SL.purchaseReference(lines, App.compareStores(), pById);
+    const purchase = { id: 'pu-' + App.uid(), date, store: store.id, total: SL.round2(total), estTotal, items: lines, ref,
+      saving: SL.round2(ref.avg - estTotal), paidBy, createdAt: Date.now() };
+    const changes = [];
+    if (exp) {
+      purchase.expense = exp.id;
+      changes.push({ kind: 'expense', data: Object.assign({}, S.get(exp.id) || exp, { purchase: purchase.id }) });
+    } else if (mkExp) {
+      const split = {}; ps.forEach(p => { split[p.id] = true; });
+      const e = { id: App.uid(), description: 'Compra ' + store.name, amount: SL.round2(total), currency: 'EUR', rate: 1, paidBy, date,
+        group: S.get('g-casa') ? 'g-casa' : (App.groups()[0] || {}).id, category: S.get('c-super') ? 'c-super' : (App.categories()[0] || {}).id,
+        mode: 'equal', split, createdAt: Date.now(), purchase: purchase.id };
+      purchase.expense = e.id;
+      changes.push({ kind: 'expense', data: e });
+    }
+    changes.push({ kind: 'purchase', data: purchase });
+    // Lo comprado entra en la despensa: los productos nuevos empiezan a controlarse desde esta compra.
+    const tracked = new Set();
+    items.forEach(i => {
+      if (!i.product || tracked.has(i.product) || S.get(App.stockId(i.product))) return;
+      tracked.add(i.product);
+      changes.push({ kind: 'stock', data: { id: App.stockId(i.product), product: i.product, qty: 0, at: purchase.createdAt - 1 } });
+    });
+    items.forEach(i => changes.push({ kind: 'shopitem', data: i, deleted: true }));
+    S.putMany(changes);
+    App.setCurrentStore(store.id);
+    if (App.modules.chores) App.modules.chores.shopDone(paidBy, date); // tarea «Hacer la compra» hecha
+    return purchase;
+  }
+  // El súper que suena en la descripción del gasto («Mercadona», «Día»…), o el habitual.
+  const norm = t => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const storeFromText = t => App.stores().find(st => norm(t).includes(norm(st.name).split(/[ /]/)[0])) || App.currentStore();
+
+  // Tras apuntar a mano un gasto del súper: «¿marcar como comprado lo de la lista?».
+  function openBoughtFromExpense(exp) {
+    const items = App.shopItems();
+    if (!items.length) return;
+    const anyChecked = items.some(i => i.checked);
+    const pick = {}; items.forEach(i => { pick[i.id] = anyChecked ? !!i.checked : true; });
+    let store = storeFromText(exp.description);
+    const m = App.sheet(`<h3>🛒 ¿Era la compra de la lista?</h3>
+      <div class="muted">Marca lo que has comprado: entra en la despensa, sale de la lista y cuenta como la tarea «Hacer la compra».</div>
+      <label>Súper</label><select id="st">${App.stores().map(st => `<option value="${st.id}" ${store && st.id === store.id ? 'selected' : ''}>${esc(st.name)}</option>`).join('')}</select>
+      <div class="list tight" id="its" style="margin-top:8px">${items.map(i => `<label class="item check"><input type="checkbox" data-bi="${i.id}" ${pick[i.id] ? 'checked' : ''}><div class="grow ellipsis">${esc(i.name)}</div></label>`).join('')}</div>
+      <div class="actions"><button id="no">No, gracias</button><button class="primary" id="ok">Marcar como comprado</button></div>`);
+    const $ = x => m.querySelector(x);
+    m.querySelectorAll('[data-bi]').forEach(cb => cb.onchange = () => { pick[cb.dataset.bi] = cb.checked; });
+    $('#st').onchange = () => { store = S.get($('#st').value); };
+    $('#no').onclick = App.closeSheet;
+    $('#ok').onclick = () => {
+      const sel = items.filter(i => pick[i.id]);
+      if (!sel.length) { App.toast('No has marcado nada'); return; }
+      const e = S.get(exp.id) || exp;
+      recordPurchase({ items: sel, store, total: e.amount, date: e.date, paidBy: e.paidBy, exp: e });
+      App.closeSheet();
+      App.toast(`${sel.length} producto${sel.length === 1 ? '' : 's'} a la despensa ✅`);
+    };
+  }
+
   // ---------- Terminar compra → gasto en el split ----------
-  function openFinish() {
+  // all = true: con lo que haya en la lista (aunque no esté marcado).
+  function openFinish(all) {
     const pById = App.productsById(), ps = App.people(), me = S.me();
     let store = App.currentStore(), paidBy = me;
-    const checked = App.shopItems().filter(i => i.checked);
+    const checked = all ? App.shopItems() : App.shopItems().filter(i => i.checked);
     const estAt = st => SL.round2(checked.reduce((a, i) => a + (itemCost(i, pById, st) || 0), 0));
     const m = App.sheet(`<h3>✅ Terminar compra</h3>
       <div class="muted">${checked.length} producto${checked.length === 1 ? '' : 's'} en el carro. Se guardará la compra y se creará el gasto en Split.</div>
@@ -404,32 +505,7 @@
       const total = App.num($('#tot').value);
       if (!(total > 0)) { App.toast('Pon el total del ticket'); return; }
       const date = $('#date').value || App.today();
-      const lines = checked.map(i => ({ product: i.product || null, name: i.name, section: i.section, amount: i.amount, price: i.price, cost: itemCost(i, pById, store) }));
-      const estTotal = estAt(store);
-      const ref = SL.purchaseReference(lines, App.compareStores(), pById);
-      const purchase = { id: 'pu-' + App.uid(), date, store: store.id, total: SL.round2(total), estTotal, items: lines, ref,
-        saving: SL.round2(ref.avg - estTotal), paidBy, createdAt: Date.now() };
-      const changes = [];
-      if ($('#mkExp').checked) {
-        const split = {}; ps.forEach(p => { split[p.id] = true; });
-        const exp = { id: App.uid(), description: 'Compra ' + store.name, amount: SL.round2(total), currency: 'EUR', rate: 1, paidBy, date,
-          group: S.get('g-casa') ? 'g-casa' : (App.groups()[0] || {}).id, category: S.get('c-super') ? 'c-super' : (App.categories()[0] || {}).id,
-          mode: 'equal', split, createdAt: Date.now(), purchase: purchase.id };
-        purchase.expense = exp.id;
-        changes.push({ kind: 'expense', data: exp });
-      }
-      changes.push({ kind: 'purchase', data: purchase });
-      // Lo comprado entra en la despensa: los productos nuevos empiezan a controlarse desde esta compra.
-      const tracked = new Set();
-      checked.forEach(i => {
-        if (!i.product || tracked.has(i.product) || S.get(App.stockId(i.product))) return;
-        tracked.add(i.product);
-        changes.push({ kind: 'stock', data: { id: App.stockId(i.product), product: i.product, qty: 0, at: purchase.createdAt - 1 } });
-      });
-      checked.forEach(i => changes.push({ kind: 'shopitem', data: i, deleted: true }));
-      S.putMany(changes);
-      App.setCurrentStore(store.id);
-      if (App.modules.chores) App.modules.chores.shopDone(paidBy, date); // tarea «Hacer la compra» hecha
+      const purchase = recordPurchase({ items: checked, store, total, date, paidBy, exp: null, mkExp: $('#mkExp').checked });
       App.closeSheet();
       const sv = purchase.saving;
       App.toast(sv > 0.5 ? `Compra guardada y a la despensa. Ahorráis ${euros(sv)} frente a la media 🎉` : 'Compra guardada y a la despensa');
@@ -780,5 +856,5 @@
     };
   }
 
-  App.modules.shop = { render, openProduct, addProduct, essentialsStatus, newEssentialItem, itemCost, defaultAmount, essLabel };
+  App.modules.shop = { render, openProduct, addProduct, openBoughtFromExpense, recordPurchase, essentialsStatus, newEssentialItem, itemCost, defaultAmount, essLabel };
 })();

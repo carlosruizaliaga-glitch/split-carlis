@@ -12,6 +12,29 @@
     else renderBalance();
   }
 
+  // ---------- Gastos rápidos ----------
+  // Lo que más se repite en los últimos 4 meses (misma descripción, categoría y grupo).
+  function quickList() {
+    const since = App.addDays(App.today(), -120), cnt = {};
+    App.expenses().filter(e => e.date >= since && !e.recurring && e.description).forEach(e => {
+      const k = e.description.trim().toLowerCase() + '|' + e.category + '|' + e.group;
+      const c = cnt[k] = cnt[k] || { n: 0, e };
+      c.n++; if (e.date >= c.e.date) c.e = e;
+    });
+    return Object.values(cnt).filter(c => c.n >= 2).sort((a, b) => b.n - a.n).slice(0, 6).map(c => c.e);
+  }
+  function quickHtml() {
+    const q = quickList();
+    return q.length ? `<div class="section-label" style="margin:10px 4px 6px">⚡ Gasto rápido</div><div class="chips scroll-x quick-exp">${q.map(e =>
+      `<button data-qx="${e.id}">${esc(App.category(e.category).emoji)} ${esc(e.description)}</button>`).join('')}<button data-qx="">＋ Otro</button></div>` : '';
+  }
+  function bindQuick(root) {
+    root.querySelectorAll('[data-qx]').forEach(b => b.onclick = () => {
+      const e = b.dataset.qx && S.get(b.dataset.qx);
+      openExpense(null, e ? { description: e.description, category: e.category, group: e.group, paidBy: S.me() || e.paidBy } : null);
+    });
+  }
+
   // ---------- Saldo ----------
   function renderBalance() {
     const view = App.view, ps = App.people(), me = S.me();
@@ -28,7 +51,7 @@
       hero = b > 0 ? `<div class="muted">Te deben</div><div class="big pos">${eur(b)}</div>`
         : b < 0 ? `<div class="muted">Debes</div><div class="big neg">${eur(-b)}</div>` : `<div class="big">En paz 🐱🐈‍⬛</div>`;
     }
-    let h = `<div class="card hero">${hero}</div>`;
+    let h = `<div class="card hero">${hero}</div>${quickHtml()}`;
     if (plan.length) {
       h += `<h2>Para quedar en paz</h2><div class="card list">`;
       plan.forEach((t, i) => {
@@ -62,6 +85,7 @@
     }
     h += `</div><button class="block ghost" id="addPayment">💸 Registrar un pago entre vosotros</button>`;
     view.innerHTML = h;
+    bindQuick(view);
     view.querySelectorAll('[data-settle]').forEach(el => el.onclick = () => {
       const t = plan[+el.dataset.settle];
       openPayment({ from: t.from, to: t.to, amount: t.cents / 100, note: 'Saldar cuentas' });
@@ -161,21 +185,38 @@
       paid[e.paidBy] = (paid[e.paidBy] || 0) + t;
       Object.entries(shares).forEach(([id, c]) => { owed[id] = (owed[id] || 0) + c; });
     });
-    const bars = (obj, lookup) => {
+    // Mes anterior al elegido, para comparar.
+    let prevM = null, prevTotal = 0;
+    const prevGroup = {}, prevCat = {};
+    if (m) {
+      const d0 = new Date(m + '-15T12:00:00'); d0.setMonth(d0.getMonth() - 1); prevM = d0.toISOString().slice(0, 7);
+      App.expenses().filter(e => App.monthOf(e.date) === prevM).forEach(e => {
+        const t = L.expenseShares(e).total; prevTotal += t;
+        prevGroup[e.group] = (prevGroup[e.group] || 0) + t; prevCat[e.category] = (prevCat[e.category] || 0) + t;
+      });
+    }
+    const delta = (v, pv) => {
+      if (!prevM || (!pv && !v)) return '';
+      const d = v - (pv || 0);
+      if (Math.abs(d) < 100) return '<span class="delta">=</span>';
+      return `<span class="delta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${eur(Math.abs(d))}</span>`;
+    };
+    const bars = (obj, lookup, prev) => {
       const max = Math.max(1, ...Object.values(obj));
       return Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
         const x = lookup(k);
-        return `<div class="barrow"><div class="row"><div class="grow ellipsis">${esc(x.emoji)} ${esc(x.name)}</div><div class="amount">${eur(v)}</div></div>
+        return `<div class="barrow"><div class="row"><div class="grow ellipsis">${esc(x.emoji)} ${esc(x.name)}</div>${prev ? delta(v, prev[k]) : ''}<div class="amount">${eur(v)}</div></div>
           <div class="bar"><span style="width:${(v / max * 100).toFixed(1)}%"></span></div></div>`;
       }).join('');
     };
     let h = `<select id="smonth"><option value="">Todo el tiempo</option>
       ${allMonths.map(x => `<option value="${x}" ${m === x ? 'selected' : ''}>${esc(App.fmtMonth(x))}</option>`).join('')}</select>
       <div class="card hero"><div class="muted">Total gastado</div><div class="big">${eur(total)}</div>
-      <div class="muted">${exps.length} gasto${exps.length === 1 ? '' : 's'}</div></div>`;
+      <div class="muted">${exps.length} gasto${exps.length === 1 ? '' : 's'}</div>
+      ${prevM && prevTotal ? `<div style="margin-top:6px">${delta(total, prevTotal)} <span class="muted">frente a ${esc(App.fmtMonth(prevM).toLowerCase())} (${eur(prevTotal)})</span></div>` : ''}</div>`;
     if (total) {
-      h += `<h2>Por grupo</h2><div class="card">${bars(byGroup, App.group)}</div>`;
-      h += `<h2>Por categoría</h2><div class="card">${bars(byCat, App.category)}</div>`;
+      h += `<h2>Por grupo</h2><div class="card">${bars(byGroup, App.group, prevGroup)}</div>`;
+      h += `<h2>Por categoría</h2><div class="card">${bars(byCat, App.category, prevCat)}</div>`;
       h += `<h2>Por persona</h2><div class="card list">`;
       App.people().forEach(p => {
         h += `<div class="item">${App.avatar(p, 1)}<div class="grow">${esc(p.name)}</div><div class="amount">
@@ -231,6 +272,8 @@
       <label>¿Cómo se reparte?</label>
       <div class="seg"><button data-mode="equal">A partes iguales</button><button data-mode="percent">%</button><button data-mode="exact">Importes</button></div>
       <div id="splitBox"></div><div class="hint" id="splitHint"></div>
+      ${isNew ? '<label class="row check-line"><input type="checkbox" id="rec"> 🔁 Repetir cada mes (gasto fijo)</label>' : ''}
+      ${e.recurring ? '<div class="note">🔁 Gasto fijo: se apunta solo cada mes. Se cambia en Ajustes → Gastos fijos.</div>' : ''}
       <div class="actions">${isNew ? '' : '<button class="danger" id="del">Eliminar</button>'}<button id="cancel">Cancelar</button><button class="primary" id="ok">Guardar</button></div>`);
     const $ = s => m.querySelector(s);
     const readAmount = () => App.num($('#amt').value) || 0;
@@ -364,6 +407,10 @@
       }
       try { localStorage.setItem('splitcarlis.lastGroup', exp.group); } catch (x) {}
       App.closeSheet(); App.toast('Gasto guardado');
+      if (isNew && $('#rec') && $('#rec').checked && exp.mode === 'equal' && exp.currency === 'EUR') App.addRecurringFromExpense(exp);
+      // Súper apuntado a mano: ofrecer marcar lo de la lista como comprado (despensa, tarea de la compra…).
+      if (isNew && exp.category === 'c-super' && !exp.purchase && App.shopItems().length && App.modules.shop.openBoughtFromExpense)
+        setTimeout(() => App.modules.shop.openBoughtFromExpense(exp), 250);
     };
     const del = $('#del');
     if (del) del.onclick = async () => {
@@ -372,7 +419,7 @@
       App.removeWithUndo('expense', existing, 'Gasto eliminado');
     };
     renderGroupsCats(); refreshTop(); renderSplit();
-    if (isNew && !preset) setTimeout(() => $('#desc').focus(), 80);
+    if (isNew) setTimeout(() => $(preset && preset.description ? '#amt' : '#desc').focus(), 80);
   }
 
   // ---------- Formulario de pago ----------
@@ -408,5 +455,5 @@
     };
   }
 
-  App.modules.split = { render, openExpense, openPayment };
+  App.modules.split = { render, openExpense, openPayment, quickHtml, bindQuick };
 })();

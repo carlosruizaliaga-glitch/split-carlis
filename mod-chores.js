@@ -196,13 +196,27 @@
     if (opts && opts.showDay) sub = `${DAY_NAMES[(new Date(o.date + 'T12:00:00').getDay() + 6) % 7]}${sub ? ' · ' + sub : ''}`;
     if (o.doneAt && o.doneBy && o.doneBy !== o.who) sub += `${sub ? ' · ' : ''}la hizo ${esc(App.person(o.doneBy).name)}`;
     const late = !o.doneAt && !o.skip && o.date < today;
-    return `<div class="chrow${o.doneAt ? ' done' : ''}${o.skip ? ' skip' : ''}${late ? ' late' : ''}">
+    return `<div class="chrow${o.doneAt ? ' done' : ''}${o.skip ? ' skip' : ''}${late ? ' late' : ''}" data-row="${o.id}">
       <button class="chk${o.doneAt ? ' on' : ''}" data-cd="${o.id}" aria-label="Hecha">${o.doneAt ? '✓' : ''}</button>
       <div class="grow tap" data-co="${o.id}"><div class="ellipsis nm">${esc(c.emoji)} ${esc(c.name)}</div>${sub || late ? `<div class="muted ellipsis">${late ? '<span class="neg">pendiente</span>' + (sub ? ' · ' : '') : ''}${sub}</div>` : ''}</div>
       <span class="ptspill">+${o.w || 1}</span>
       <button class="avbtn" data-cw="${o.id}" aria-label="Cambiar persona">${App.avatar(p, 1)}</button></div>`;
   }
   function bindRows(root) {
+    root.querySelectorAll('.chrow[data-row]').forEach(row => {
+      let x0 = null, y0 = 0, dx = 0, horiz = null;
+      row.addEventListener('touchstart', ev => { const t = ev.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; horiz = null; }, { passive: true });
+      row.addEventListener('touchmove', ev => {
+        if (x0 == null) return;
+        const t = ev.touches[0]; dx = t.clientX - x0;
+        if (horiz == null && (Math.abs(dx) > 8 || Math.abs(t.clientY - y0) > 8)) horiz = Math.abs(dx) > Math.abs(t.clientY - y0);
+        if (horiz && dx > 0) { row.style.transform = `translateX(${Math.min(dx, 120)}px)`; row.classList.toggle('swiping', dx > 80); }
+      }, { passive: true });
+      row.addEventListener('touchend', () => {
+        if (horiz && dx > 80) { const o = S.get(row.dataset.row); if (o) setDone(o, !o.doneAt); }
+        row.style.transform = ''; row.classList.remove('swiping'); x0 = null;
+      });
+    });
     root.querySelectorAll('[data-cd]').forEach(b => b.onclick = () => { const o = S.get(b.dataset.cd); if (o) setDone(o, !o.doneAt); });
     root.querySelectorAll('[data-co]').forEach(el => el.onclick = () => openOcc(S.get(el.dataset.co)));
     root.querySelectorAll('[data-cw]').forEach(b => b.onclick = () => {
@@ -214,8 +228,17 @@
     });
   }
 
+  // Cálculos del ranking guardados mientras no cambien los datos (con meses de historial, recalcular cansa).
+  const memo = { v: -1, c: {} };
+  function memoize(key, fn) {
+    const v = S.version();
+    if (memo.v !== v) { memo.v = v; memo.c = {}; }
+    return key in memo.c ? memo.c[key] : (memo.c[key] = fn());
+  }
+
   // Puntos de la semana por persona: asignados, hechos.
-  function weekScore(monday) {
+  function weekScore(monday) { return memoize('ws' + monday, () => weekScoreRaw(monday)); }
+  function weekScoreRaw(monday) {
     const out = {};
     App.people().forEach(p => { out[p.id] = { assigned: 0, done: 0, n: 0, nd: 0 }; });
     occs().filter(o => o.week === monday && !o.skip).forEach(o => {
@@ -411,7 +434,8 @@
     if (period === 'month') return o => App.monthOf(o.date) === month;
     return () => true;
   }
-  function personStats(pid) {
+  function personStats(pid) { return memoize('ps' + pid, () => personStatsRaw(pid)); }
+  function personStatsRaw(pid) {
     const all = occs(), mine = all.filter(o => o.doneAt && doer(o) === pid);
     const s = { count: mine.length, points: mine.reduce((a, o) => a + (o.w || 1), 0), cook: 0, shop: 0, cats: 0, helper: 0, early: 0, maxSame: 0, distinct: 0, streak: 0, perfect: 0, wins: 0 };
     const per = {};
@@ -579,13 +603,53 @@
     const late = occs().filter(o => o.week === mon && o.date < today && !o.doneAt && !o.skip && o.who === me).length;
     const sc = weekScore(mon), ps = App.people();
     if (!chores().length) return '';
-    return `<div class="card"><div class="hhead"><span class="grow">🧹 Tareas de hoy</span><button class="small ghost" data-go="chores">Semana ›</button></div>
+    const minePending = list.filter(o => o.who === me && !o.doneAt);
+    return `${lastWeekCard()}<div class="card"><div class="hhead"><span class="grow">🧹 Tareas de hoy</span><button class="small ghost" data-go="chores">Semana ›</button></div>
       ${list.map(o => occRow(o)).join('') || '<div class="muted" style="padding:6px 0">Hoy no hay tareas. ¡Día libre! 🎉</div>'}
+      ${minePending.length > 1 ? `<button class="small block" id="allMine">✓ Hechas todas las mías de hoy (${minePending.length})</button>` : ''}
+      ${list.length ? '<div class="muted center" style="margin-top:6px;font-size:12px">Consejo: desliza una tarea a la derecha para marcarla</div>' : ''}
       ${late ? `<div class="alert" data-go="chores" style="margin-top:8px"><div class="emoji">⏰</div><div class="grow"><b>Tienes ${late} tarea${late === 1 ? '' : 's'} atrasada${late === 1 ? '' : 's'}</b><div class="muted">De días anteriores de esta semana</div></div></div>` : ''}
       <div class="row" style="margin-top:8px;gap:14px;flex-wrap:wrap">${ps.map(p => `<span class="row" style="gap:6px">${App.avatar(p, 1)}<span class="muted"><b>${sc[p.id].done}</b>/${sc[p.id].assigned} pts</span></span>`).join('')}</div></div>`;
   }
 
-  App.modules.chores = { render, openOcc, openChore, homeCard, bindRows, mealDone, shopDone, cookOf, shopOccThisWeek, ensureWeek };
+  // Resumen de una semana terminada (para Inicio y el aviso del lunes).
+  function weekSummary(monday) {
+    const sc = weekScore(monday), ps = App.people();
+    if (!ps.some(p => sc[p.id].assigned)) return null;
+    const win = weekWinner(monday), rw = rewards().find(r => r.rule === 'week');
+    const pts = ps.map(p => `${p.name} ${sc[p.id].done} pts`).join(' · ');
+    return { week: monday, winner: win, text: win ? `Ganó ${App.person(win).name} (${pts})${rw ? ` → ${rw.emoji} ${rw.name}` : ''}` : `Empate (${pts})`, reward: rw };
+  }
+  // Tarjeta en Inicio de lunes a miércoles con la semana pasada (se puede cerrar).
+  function lastWeekCard() {
+    const today = App.today(), dow = (new Date(today + 'T12:00:00').getDay() + 6) % 7;
+    if (dow > 2) return '';
+    const last = App.addDays(App.mondayOf(today), -7), sum = weekSummary(last);
+    let closed = null; try { closed = localStorage.getItem('splitcarlis.weekCard'); } catch (e) {}
+    if (!sum || closed === last) return '';
+    const ps = App.people(), sc = weekScore(last);
+    return `<div class="card weekcard"><div class="hhead"><span class="grow">🏆 La semana pasada</span><button class="xbtn" id="closeWeek" aria-label="Cerrar">✕</button></div>
+      <div class="row" style="gap:12px">${sum.winner ? `<div class="emoji" style="font-size:34px">🥇</div><div class="grow"><b>¡Ganó ${esc(App.person(sum.winner).name)}!</b>` : '<div class="emoji" style="font-size:34px">🤝</div><div class="grow"><b>¡Empate!</b>'}
+        <div class="muted">${ps.map(p => `${esc(p.name)} ${sc[p.id].done}/${sc[p.id].assigned} pts`).join(' · ')}</div>
+        ${sum.winner && sum.reward ? `<div style="margin-top:4px">${esc(sum.reward.emoji)} Premio: <b>${esc(sum.reward.name)}</b></div>` : ''}</div></div>
+      <button class="small ghost block" data-go="chores/rank">Ver ranking y logros</button></div>`;
+  }
+  // Lo que necesita Inicio además de las filas.
+  function bindHome(root) {
+    bindRows(root);
+    const all = root.querySelector('#allMine');
+    if (all) all.onclick = () => {
+      const me = S.me(), today = App.today();
+      const list = occs().filter(o => o.date === today && o.who === me && !o.doneAt && !o.skip);
+      S.putMany(list.map(o => ({ kind: 'chorewk', data: Object.assign({}, o, { doneAt: Date.now(), doneBy: me }) }))
+        .concat(list.filter(o => o.meal && S.get(o.meal)).map(o => ({ kind: 'meal', data: Object.assign({}, S.get(o.meal), { doneAt: Date.now(), skip: false }) }))));
+      App.toast(`✅ ${list.length} tareas hechas: +${list.reduce((a, o) => a + (o.w || 1), 0)} pts`, { undo: () => S.putMany(list.map(o => ({ kind: 'chorewk', data: o }))) });
+    };
+    const cw = root.querySelector('#closeWeek');
+    if (cw) cw.onclick = () => { try { localStorage.setItem('splitcarlis.weekCard', App.addDays(App.mondayOf(App.today()), -7)); } catch (e) {} App.render(); };
+  }
+
+  App.modules.chores = { render, openOcc, openChore, homeCard, bindRows, bindHome, mealDone, shopDone, cookOf, shopOccThisWeek, ensureWeek, weekSummary };
 
   // Datos iniciales (los usa ensureSeed del núcleo).
   App.choreSeed = function () {

@@ -187,9 +187,9 @@
   const MODS = [
     { id: 'home', icon: '🏠', name: 'Inicio', title: 'Inicio', subs: [] },
     { id: 'split', icon: '💶', name: 'Gastos', title: 'Gastos', subs: [['balance', 'Saldo'], ['moves', 'Movimientos'], ['stats', 'Resumen']] },
-    { id: 'menu', icon: '📅', name: 'Menú', title: 'Menú semanal', subs: [] },
+    { id: 'menu', icon: '📅', name: 'Menú', title: 'Menú', subs: [] },
     { id: 'recipes', icon: '🍳', name: 'Recetas', title: 'Recetas', subs: [] },
-    { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['pantry', 'Despensa'], ['prices', 'Productos'], ['compare', 'Comparar'], ['savings', 'Ahorro']] },
+    { id: 'shop', icon: '🛒', name: 'Compra', title: 'Compra', subs: [['list', 'Lista'], ['pantry', 'Despensa'], ['prices', 'Productos'], ['analysis', 'Análisis']] },
     { id: 'chores', icon: '🧹', name: 'Tareas', title: 'Tareas', subs: [['week', 'Semana'], ['list', 'Tareas'], ['rank', 'Ranking']] },
     // Ajustes no va en la barra: se abre con el ⚙️ de la cabecera.
     { id: 'settings', icon: '⚙️', name: 'Ajustes', title: 'Ajustes', subs: [], hidden: true }
@@ -530,9 +530,18 @@ Prueba Ajustes → Forzar actualización de la app y vuelve a intentarlo.`);
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
 
+  // Enlaces directos (p. ej. desde un aviso): #chores, #chores/rank…
+  function goHash(h) {
+    const [m, s] = (h || '').replace(/^#/, '').split('/');
+    if (m && MODS.some(x => x.id === m)) App.go(m, s || null);
+  }
   App.start = function () {
     App.started = true;
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.addEventListener('message', ev => { if (ev.data && ev.data.go) goHash(ev.data.go); });
+    }
     App.render();
+    if (location.hash) { goHash(location.hash); try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) {} }
   };
 })();
